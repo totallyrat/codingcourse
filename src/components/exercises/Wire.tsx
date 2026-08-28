@@ -19,7 +19,12 @@ const ROW_H = 22;
 const PAD_TOP = 10;
 
 interface Pin {
+  /** Content-facing id, `nodeId:label`. A link is always out -> in, so this
+   *  stays unambiguous in the exercise data even when a node has an input and
+   *  an output of the same name (every exec pin, for instance). */
   id: string;
+  /** Unique within the graph. The DOM and every lookup use this. */
+  key: string;
   x: number;
   y: number;
   side: 'in' | 'out';
@@ -37,6 +42,7 @@ function pinsOf(node: WireNode): Pin[] {
   (node.inputs ?? []).forEach((label, i) => {
     out.push({
       id: `${node.id}:${label}`,
+      key: `in:${node.id}:${label}`,
       nodeId: node.id,
       label,
       side: 'in',
@@ -47,6 +53,7 @@ function pinsOf(node: WireNode): Pin[] {
   (node.outputs ?? []).forEach((label, i) => {
     out.push({
       id: `${node.id}:${label}`,
+      key: `out:${node.id}:${label}`,
       nodeId: node.id,
       label,
       side: 'out',
@@ -83,9 +90,18 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
   const locked = grade !== null;
 
   const pins = useMemo(() => {
-    const map = new Map<string, Pin>();
-    for (const node of exercise.nodes) for (const pin of pinsOf(node)) map.set(pin.id, pin);
-    return map;
+    // Keyed by side, because a node's input and output pins routinely share a
+    // name; keying by `nodeId:label` alone silently loses one of them.
+    const byKey = new Map<string, Pin>();
+    const outputs = new Map<string, Pin>();
+    const inputs = new Map<string, Pin>();
+    for (const node of exercise.nodes) {
+      for (const pin of pinsOf(node)) {
+        byKey.set(pin.key, pin);
+        (pin.side === 'out' ? outputs : inputs).set(pin.id, pin);
+      }
+    }
+    return { byKey, outputs, inputs };
   }, [exercise]);
 
   const bounds = useMemo(() => {
@@ -129,7 +145,7 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
     if (locked) return;
     e.preventDefault();
     e.stopPropagation();
-    if (pending && pending.id !== pin.id) {
+    if (pending && pending.key !== pin.key) {
       connect(pending, pin);
       setPending(null);
       setCursor(null);
@@ -144,9 +160,10 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
     const move = (e: PointerEvent) => setCursor(toLocal(e));
     const up = (e: PointerEvent) => {
       const target = document.elementFromPoint(e.clientX, e.clientY);
-      const pinId = target?.getAttribute('data-pin');
-      if (pinId && pins.has(pinId) && pinId !== pending.id) {
-        connect(pending, pins.get(pinId)!);
+      const key = target?.getAttribute('data-pin');
+      const dropped = key ? pins.byKey.get(key) : undefined;
+      if (dropped && dropped.key !== pending.key) {
+        connect(pending, dropped);
         setPending(null);
         setCursor(null);
       }
@@ -188,8 +205,8 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
 
           {/* the wires the learner has drawn */}
           {links.map(([fromId, toId], i) => {
-            const from = pins.get(fromId);
-            const to = pins.get(toId);
+            const from = pins.outputs.get(fromId);
+            const to = pins.inputs.get(toId);
             if (!from || !to) return null;
             const state = locked ? (wanted.has(`${fromId}>${toId}`) ? 'right' : 'wrong') : '';
             return (
@@ -215,8 +232,8 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
             ? exercise.links
                 .filter(([f, t]) => !drawn.has(`${f}>${t}`))
                 .map(([fromId, toId]) => {
-                  const from = pins.get(fromId);
-                  const to = pins.get(toId);
+                  const from = pins.outputs.get(fromId);
+                  const to = pins.inputs.get(toId);
                   if (!from || !to) return null;
                   return (
                     <path
@@ -265,13 +282,13 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
                 ) : null}
 
                 {pinsOf(node).map((pin) => (
-                  <g key={pin.id}>
+                  <g key={pin.key}>
                     <circle
                       cx={pin.x}
                       cy={pin.y}
                       r="10"
                       fill="transparent"
-                      data-pin={pin.id}
+                      data-pin={pin.key}
                       className="wire__pinhit"
                       onPointerDown={onPinDown(pin)}
                     />
@@ -279,8 +296,8 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
                       cx={pin.x}
                       cy={pin.y}
                       r="5"
-                      className={`wire__pin${pending?.id === pin.id ? ' is-armed' : ''}`}
-                      data-pin={pin.id}
+                      className={`wire__pin${pending?.key === pin.key ? ' is-armed' : ''}`}
+                      data-pin={pin.key}
                       pointerEvents="none"
                     />
                     <text

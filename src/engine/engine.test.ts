@@ -447,14 +447,18 @@ describe('content library', () => {
         expect(markers, `${ex.id} blank count mismatch`).toBe(ex.blanks.length);
       }
       if (ex.kind === 'wire') {
-        const pins = new Set<string>();
+        // A link runs out -> in. Checking the two sides separately is what
+        // catches a link pointing at a node's *output* when it meant the
+        // input of the same name, which every exec pin has.
+        const outputs = new Set<string>();
+        const inputs = new Set<string>();
         for (const n of ex.nodes) {
-          for (const o of n.outputs ?? []) pins.add(`${n.id}:${o}`);
-          for (const i of n.inputs ?? []) pins.add(`${n.id}:${i}`);
+          for (const o of n.outputs ?? []) outputs.add(`${n.id}:${o}`);
+          for (const i of n.inputs ?? []) inputs.add(`${n.id}:${i}`);
         }
         for (const [from, to] of ex.links) {
-          expect(pins.has(from), `${ex.id} links from unknown pin ${from}`).toBe(true);
-          expect(pins.has(to), `${ex.id} links to unknown pin ${to}`).toBe(true);
+          expect(outputs.has(from), `${ex.id}: ${from} is not an output pin`).toBe(true);
+          expect(inputs.has(to), `${ex.id}: ${to} is not an input pin`).toBe(true);
         }
       }
     }
