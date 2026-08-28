@@ -4,29 +4,27 @@ name: Phone app
 # is what makes "Add to Home Screen" possible at all: a service worker only
 # registers over https from its own origin, so the app has to be served, not
 # handed over as a file.
+#
+# It publishes to the gh-pages branch rather than through the Pages deployment
+# API. Creating a Pages site from a workflow needs a permission the repository
+# token does not have here — pushing the branch enabled Pages by itself, and it
+# keeps working whoever runs it.
 on:
   push:
     branches: [main, 'claude/**']
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# One deployment at a time; a queued run should replace an older one rather
-# than race it.
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
   deploy:
-    name: Build and deploy
+    name: Build and publish
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,17 +37,19 @@ jobs:
       # file list of the actual build.
       - run: npm run build:mobile
 
-      - name: Configure Pages
-        # `enablement` turns Pages on for the repository the first time this
-        # runs, so publishing does not depend on somebody visiting a settings
-        # page first.
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist-mobile
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      - name: Publish to gh-pages
+        # A fresh single-commit history each time: the branch is build output,
+        # not source, and keeping every past build of it would grow the
+        # repository for nothing.
+        run: |
+          touch dist-mobile/.nojekyll
+          cd dist-mobile
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Publish the phone app from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
