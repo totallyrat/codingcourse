@@ -4,7 +4,10 @@ name: Build installers
 # attaches them to a GitHub release, so "download the app" is one click.
 on:
   push:
-    branches: [main]
+    # Feature branches build too. Restricting this to main meant the workflow
+    # could never run in a repository that does not have a main branch yet,
+    # which is exactly the state a new project starts in.
+    branches: [main, 'claude/**']
     tags: ['v*']
   pull_request:
   workflow_dispatch:
