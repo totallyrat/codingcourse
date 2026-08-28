@@ -1,0 +1,73 @@
+/* ============================================================
+   Wrapper chrome for the standalone wizard build.
+
+   Everything here is expressed in the app's own tokens - this is the same
+   wizard, in a browser instead of a window, so it should not look like a
+   different product.
+   ============================================================ */
+
+.demobar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: var(--titlebar-h);
+  padding: 0 var(--sp-4);
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+}
+.demobar__mark {
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+.demobar__title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-body);
+}
+.demobar__sep {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.demobar__note {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.done {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: var(--sp-8) var(--sp-7) var(--sp-9);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  animation: fade-up var(--t-slow) var(--ease-out);
+}
+.done__head h1 {
+  margin: 6px 0 var(--sp-4);
+}
+.done__sub {
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 62ch;
+}
+.done__note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.done__units {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+}
+.done__foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line-soft);
+}

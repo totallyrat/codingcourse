@@ -15,6 +15,7 @@
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.web.json && vite build",
     "preview": "vite preview",
+    "demo:wizard": "node scripts/build-wizard-demo.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "pack": "npm run build && electron-builder --dir",
