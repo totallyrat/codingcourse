@@ -1,0 +1,510 @@
+/* ============================================================
+   Chrome — title bar with Windows caption-button metrics
+   ============================================================ */
+.titlebar {
+  height: var(--titlebar-h);
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line-soft);
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 50;
+}
+.titlebar.mac {
+  padding-left: 78px;
+}
+.titlebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+.titlebar__mark {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.titlebar__title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-body);
+  letter-spacing: 0.01em;
+}
+.titlebar__crumb {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.titlebar__controls {
+  display: flex;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+  height: 100%;
+}
+/* 46x32 is the Windows 11 caption-button hit target. */
+.caption-btn {
+  width: 46px;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--text-body);
+  transition: background var(--t-fast) linear;
+}
+.caption-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.caption-btn:active {
+  background: rgba(255, 255, 255, 0.04);
+}
+.caption-btn--close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+.caption-btn--close:active {
+  background: #b2251a;
+}
+.caption-btn svg {
+  display: block;
+}
+
+/* ============================================================
+   Buttons — a monochrome take on the "pressable slab"
+   ============================================================ */
+.btn {
+  --btn-bg: var(--surface-2);
+  --btn-fg: var(--text);
+  --btn-edge: #000;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  min-height: 46px;
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 1px solid var(--line);
+  font-size: var(--step-0);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  box-shadow: 0 3px 0 0 var(--btn-edge);
+  transform: translateY(0);
+  transition:
+    transform var(--t-fast) var(--ease-out),
+    box-shadow var(--t-fast) var(--ease-out),
+    background var(--t-fast) linear,
+    opacity var(--t-fast) linear;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+/* The 3px travel is the whole point: the button physically bottoms out. */
+.btn:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 0 0 0 var(--btn-edge);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: 0 3px 0 0 var(--btn-edge);
+}
+
+.btn--primary {
+  --btn-bg: #ffffff;
+  --btn-fg: var(--text-inverse);
+  --btn-edge: #8f8f99;
+  border-color: #ffffff;
+}
+.btn--primary:hover:not(:disabled) {
+  --btn-bg: #f0f0f2;
+  background: #f0f0f2;
+}
+.btn--right {
+  --btn-bg: var(--right);
+  --btn-fg: #04140c;
+  --btn-edge: #3f8f66;
+  border-color: var(--right);
+}
+.btn--right:hover:not(:disabled) {
+  background: #96f5c2;
+}
+.btn--wrong {
+  --btn-bg: var(--wrong);
+  --btn-fg: #200607;
+  --btn-edge: #92454a;
+  border-color: var(--wrong);
+}
+.btn--wrong:hover:not(:disabled) {
+  background: #ff9797;
+}
+.btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.btn--ghost:active:not(:disabled) {
+  transform: none;
+}
+.btn--outline {
+  background: transparent;
+  border-color: var(--line-strong);
+  box-shadow: 0 3px 0 0 #000;
+}
+.btn--sm {
+  min-height: 34px;
+  padding: 6px 14px;
+  font-size: var(--step--1);
+  box-shadow: 0 2px 0 0 var(--btn-edge);
+}
+.btn--sm:active:not(:disabled) {
+  transform: translateY(2px);
+}
+.btn--lg {
+  min-height: 56px;
+  padding: 16px 34px;
+  font-size: var(--step-1);
+}
+.btn--block {
+  width: 100%;
+}
+
+/* ============================================================
+   Surfaces
+   ============================================================ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+}
+.card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+.card--quiet {
+  background: transparent;
+  border-color: var(--line-soft);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.chip--right {
+  color: var(--right);
+  border-color: var(--right-line);
+  background: var(--right-dim);
+}
+.chip--wrong {
+  color: var(--wrong);
+  border-color: var(--wrong-line);
+  background: var(--wrong-dim);
+}
+.chip--streak {
+  color: var(--streak);
+  border-color: #6d5a33;
+  background: var(--streak-dim);
+}
+.chip--solid {
+  background: var(--text);
+  color: var(--text-inverse);
+  border-color: var(--text);
+  font-weight: 600;
+}
+
+.divider {
+  height: 1px;
+  background: var(--line-soft);
+  border: 0;
+  margin: 0;
+}
+
+.kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   Progress
+   ============================================================ */
+.progress {
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  position: relative;
+}
+.progress__fill {
+  height: 100%;
+  background: var(--text);
+  border-radius: var(--r-pill);
+  transition: width var(--t-slow) var(--ease-out);
+  position: relative;
+}
+.progress__fill::after {
+  /* A slim highlight so the bar doesn't read as a flat white block. */
+  content: '';
+  position: absolute;
+  inset: 1px 3px auto 3px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.55);
+}
+.progress--slim {
+  height: 6px;
+}
+.progress--slim .progress__fill::after {
+  display: none;
+}
+.progress--right .progress__fill {
+  background: var(--right);
+}
+
+.ring {
+  transform: rotate(-90deg);
+}
+.ring__track {
+  stroke: var(--surface-3);
+}
+.ring__value {
+  stroke: var(--text);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--t-slow) var(--ease-out);
+}
+
+/* ============================================================
+   Hearts
+   ============================================================ */
+.hearts {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.heart {
+  width: 18px;
+  height: 18px;
+  color: var(--wrong);
+  transition:
+    transform var(--t-med) var(--ease-spring),
+    opacity var(--t-med) linear,
+    color var(--t-med) linear;
+}
+.heart--spent {
+  color: var(--surface-3);
+  transform: scale(0.82);
+}
+.heart--losing {
+  animation: heart-break 520ms var(--ease-out);
+}
+@keyframes heart-break {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.45) rotate(-8deg);
+  }
+  100% {
+    transform: scale(0.82);
+  }
+}
+
+/* ============================================================
+   Toasts
+   ============================================================ */
+.toasts {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 400;
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+  font-size: var(--step--1);
+  color: var(--text);
+  animation: pop-in var(--t-med) var(--ease-spring);
+}
+.toast__icon {
+  font-size: 14px;
+}
+
+/* ============================================================
+   Tooltip
+   ============================================================ */
+.tip {
+  position: relative;
+  display: inline-flex;
+}
+.tip__body {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  background: #ffffff;
+  color: var(--text-inverse);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast) linear;
+  z-index: 300;
+}
+.tip:hover .tip__body {
+  opacity: 1;
+}
+
+/* ============================================================
+   Segmented control
+   ============================================================ */
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.segmented__item {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: var(--step--1);
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all var(--t-fast) linear;
+}
+.segmented__item:hover {
+  color: var(--text);
+}
+.segmented__item[aria-pressed='true'] {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+/* ============================================================
+   Modal
+   ============================================================ */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 2, 3, 0.72);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 500;
+  animation: fade-in var(--t-med) linear;
+  padding: 40px;
+}
+.modal {
+  width: min(560px, 100%);
+  max-height: 80vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xl);
+  padding: var(--sp-6);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.8);
+  animation: pop-in var(--t-med) var(--ease-spring);
+}
+
+/* ============================================================
+   Code display
+   ============================================================ */
+.code {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.7;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text-body);
+  user-select: text;
+  cursor: text;
+  tab-size: 4;
+}
+.code--inline {
+  display: inline;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 0.9em;
+  white-space: normal;
+}
+
+/* Token colours: a deliberately narrow, near-monochrome scheme. Only
+   literals and comments drift off-white; keywords carry weight instead of
+   hue so the editor stays inside the black-and-white brief. */
+.tok-kw {
+  color: #ffffff;
+  font-weight: 700;
+}
+.tok-str {
+  color: #b9e6c9;
+}
+.tok-num {
+  color: #f0d9a8;
+}
+.tok-com {
+  color: #5c5c68;
+  font-style: italic;
+}
+.tok-fn {
+  color: #dcdce4;
+  font-weight: 600;
+}
+.tok-punc {
+  color: #7f7f8c;
+}
+.tok-op {
+  color: #a9a9b6;
+}

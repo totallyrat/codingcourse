@@ -1,0 +1,149 @@
+/* ============================================================
+   Codeling design tokens
+   One accentless palette: near-black grounds, white type, and
+   three semantic hues used sparingly (right / wrong / streak).
+   ============================================================ */
+
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/instrument-serif-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/fonts/instrument-serif-400-italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* --- ground --------------------------------------------------------- */
+  --bg: #050506;
+  --bg-sunken: #010102;
+  --surface: #0c0c0f;
+  --surface-2: #141418;
+  --surface-3: #1c1c22;
+  --surface-hover: #1a1a20;
+
+  /* --- line ----------------------------------------------------------- */
+  --line: #212128;
+  --line-soft: #17171c;
+  --line-strong: #33333d;
+
+  /* --- type ----------------------------------------------------------- */
+  --text: #ffffff;
+  --text-body: #e6e6ea;
+  --text-muted: #8e8e9a;
+  --text-faint: #5c5c68;
+  --text-inverse: #050506;
+
+  /* --- semantic (used sparingly) -------------------------------------- */
+  --right: #7ef0b2;
+  --right-dim: #1a3428;
+  --right-line: #2f6f4e;
+  --wrong: #ff8080;
+  --wrong-dim: #3a1e21;
+  --wrong-line: #7d3339;
+  --streak: #f6c66b;
+  --streak-dim: #33291a;
+  --focus: #ffffff;
+
+  /* --- type scale (editorial: big serif display, small tight UI) ------- */
+  --font-display: 'Instrument Serif', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia,
+    'Times New Roman', serif;
+  --font-ui: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, 'SF Mono', 'Liberation Mono', monospace;
+
+  --step--1: 0.8125rem;
+  --step-0: 0.9375rem;
+  --step-1: 1.0625rem;
+  --step-2: 1.375rem;
+  --step-3: 1.875rem;
+  --step-4: 2.625rem;
+  --step-5: 3.75rem;
+  --step-6: 5rem;
+
+  /* --- space ---------------------------------------------------------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
+
+  /* --- shape ---------------------------------------------------------- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* --- motion --------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 120ms;
+  --t-med: 220ms;
+  --t-slow: 420ms;
+
+  --titlebar-h: 40px;
+
+  color-scheme: dark;
+}
+
+/* Respect the OS "reduce motion" setting everywhere, including the mascot,
+   which reads this variable at runtime rather than animating regardless. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 1ms;
+    --t-med: 1ms;
+    --t-slow: 1ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
