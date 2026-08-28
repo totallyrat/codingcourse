@@ -63,7 +63,7 @@ export function Stats({ profile }: { profile: Profile }) {
         <Metric
           label="Time"
           value={formatDuration(totals.seconds)}
-          sub={`best streak ${profile.bestStreak} days`}
+          sub={`best streak ${profile.bestStreak} day${profile.bestStreak === 1 ? '' : 's'}`}
         />
       </div>
 
