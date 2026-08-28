@@ -67,12 +67,19 @@ export function Bit({
   className = '',
   onPoke,
   trackPointer = true,
+  gazeSource,
 }: {
   mood?: BitMood;
   size?: number;
   className?: string;
   onPoke?: () => void;
   trackPointer?: boolean;
+  /**
+   * An outside answer to "where should it be looking", sampled every frame and
+   * given in -1..1 on each axis. The phone build feeds it the device tilt, so
+   * Bit watches the room rather than a pointer that is not there.
+   */
+  gazeSource?: () => { x: number; y: number } | null;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const rootRef = useRef<SVGGElement>(null);
@@ -94,6 +101,8 @@ export function Bit({
 
   const moodRef = useRef<BitMood>(mood);
   const pokeRef = useRef(0);
+  const gazeSourceRef = useRef(gazeSource);
+  gazeSourceRef.current = gazeSource;
 
   useEffect(() => {
     // A mood change is an event, not just a state swap: give the body an
@@ -160,12 +169,16 @@ export function Bit({
       }
 
       const pose = POSES[moodRef.current];
+      const external = gazeSourceRef.current?.() ?? null;
 
       // ---- body spring + idle float ---------------------------------------
       const bob = reduced ? 0 : Math.sin(clock / 1150) * 3.2 * pose.liveliness;
       const sway = reduced ? 0 : Math.sin(clock / 1730 + 1.2) * 2.1 * pose.liveliness;
+      // A tilted phone makes it lean, which is most of why it reads as being
+      // in the room with you rather than printed on the screen.
+      const lean = external && !reduced ? external.x * 5 : 0;
       const targetY = 118 + bob;
-      const targetX = 100 + sway;
+      const targetX = 100 + sway + lean;
 
       if (pokeRef.current !== 0) {
         vel.y -= pokeRef.current * 62;
@@ -277,6 +290,9 @@ export function Bit({
       if (pose.gaze) {
         gazeTarget.x = pose.gaze.x;
         gazeTarget.y = pose.gaze.y;
+      } else if (external) {
+        gazeTarget.x = Math.max(-1, Math.min(1, external.x));
+        gazeTarget.y = Math.max(-1, Math.min(1, external.y));
       } else if (trackPointer && pointerSeen && rect.width > 0) {
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height * 0.55;

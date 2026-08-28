@@ -1,6 +1,7 @@
 import { bridge } from '@/lib/bridge';
 import type { RunLanguage, TestCase, WriteExercise } from '@/engine/types';
 import { runPython } from './minipy';
+import { browserJsAvailable, runJavaScriptInBrowser } from './browserJs';
 import { stripTypes } from './stripTypes';
 
 /* ============================================================================
@@ -12,7 +13,9 @@ import { stripTypes } from './stripTypes';
      2. For JavaScript and TypeScript inside the desktop app, Electron's own
         Node - always present, so those two always really run.
      3. For Python with nothing installed, the bundled MiniPy interpreter.
-     4. Otherwise: structural checks only, and the UI says so plainly rather
+     4. In a browser - the phone build - JavaScript and TypeScript run in a
+        terminatable Worker, so "write and run" still really runs.
+     5. Otherwise: structural checks only, and the UI says so plainly rather
         than pretending the program ran.
    ========================================================================== */
 
@@ -31,7 +34,7 @@ export interface StructuralResult {
   required: boolean;
 }
 
-export type Engine = 'native' | 'minipy' | 'static';
+export type Engine = 'native' | 'minipy' | 'browser' | 'static';
 
 export interface RunOutcome {
   /** The program executed without crashing. */
@@ -71,6 +74,9 @@ export async function engineFor(lang: RunLanguage): Promise<{ engine: Engine; la
   const native = tc[lang];
   if (native) return { engine: 'native', label: `${native} on this machine` };
   if (lang === 'python') return { engine: 'minipy', label: 'built-in Python interpreter' };
+  if ((lang === 'javascript' || lang === 'typescript') && browserJsAvailable()) {
+    return { engine: 'browser', label: "this browser's own JavaScript engine" };
+  }
   return { engine: 'static', label: 'structure check only' };
 }
 
@@ -163,6 +169,20 @@ export async function runOnce(
         timedOut: res.timedOut,
       };
     }
+  }
+
+  if (langForNative === 'javascript' && browserJsAvailable()) {
+    // No Node here, which means a browser: run it in a Worker instead. The
+    // Worker is terminated on timeout, the only thing that stops `while (true)`.
+    const res = await runJavaScriptInBrowser(payload, { stdin, timeoutMs: 5000 });
+    return {
+      ok: res.ok,
+      stdout: res.stdout,
+      error: res.error,
+      engine: 'browser',
+      engineLabel: "this browser's own JavaScript engine",
+      timedOut: res.timedOut,
+    };
   }
 
   if (lang === 'python') {

@@ -33,6 +33,21 @@ describe('stripTypes removes annotations', () => {
     expect(out).toContain('const p = { x: 1 };');
   });
 
+  it('removes an interface written on one line', () => {
+    // The multi-line form is the one people copy out of documentation; the
+    // one-line form is the one people type, and it used to survive into the
+    // JavaScript and take the whole program down with a syntax error.
+    const out = strip('interface P { x: number }\nconst p = { x: 3 };\nconsole.log(p.x);');
+    expect(out).not.toContain('interface');
+    expect(out).toContain('const p = { x: 3 };');
+    expect(out).toContain('console.log(p.x);');
+  });
+
+  it('leaves an object literal that merely mentions the word type alone', () => {
+    const src = 'const config = { type: "x" };\nconsole.log(config.type);';
+    expect(strip(src)).toBe(src);
+  });
+
   it('strips as-assertions and non-null markers', () => {
     expect(strip('const n = value as number;')).toBe('const n = value;');
     expect(strip('const v = maybe!;')).toBe('const v = maybe;');

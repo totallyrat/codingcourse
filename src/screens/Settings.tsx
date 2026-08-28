@@ -109,9 +109,9 @@ export function Settings({
       <Card quiet className="settings__group">
         <h4>Running code</h4>
         <p className="muted settings__note">
-          Codeling uses a real compiler or interpreter when it finds one on this machine, and falls back to its
-          own bundled Python interpreter otherwise. Nothing is sent anywhere — your code runs locally, in a
-          temporary folder, with an eight-second limit.
+          {isElectron
+            ? 'Codeling uses a real compiler or interpreter when it finds one on this machine, and falls back to its own bundled Python interpreter otherwise. Nothing is sent anywhere — your code runs locally, in a temporary folder, with an eight-second limit.'
+            : 'On a phone there is no compiler to borrow, so Python runs on the interpreter built into the app and JavaScript runs in a sandboxed worker this page can terminate. Nothing is sent anywhere. Everything else is checked by structure, and the badge in the exercise always says which.'}
         </p>
         <div className="toolgrid">
           {(Object.keys(LANGUAGE_LABEL) as RunLanguage[]).map((lang) => {
@@ -136,8 +136,9 @@ export function Settings({
       <Card quiet className="settings__group">
         <h4>Your data</h4>
         <p className="muted settings__note">
-          Everything lives in one file on this computer. There is no account and nothing leaves the machine.
-          Export and import are in the File menu.
+          {isElectron
+            ? 'Everything lives in one file on this computer. There is no account and nothing leaves the machine. Export and import are in the File menu.'
+            : "Everything lives in this browser's own storage on this device. There is no account and nothing leaves the phone."}
         </p>
         {path ? <code className="settings__path">{path}</code> : null}
         <div className="row" style={{ gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -165,7 +166,8 @@ export function Settings({
         <h3>Erase everything?</h3>
         <p className="muted" style={{ marginTop: 10, lineHeight: 1.6 }}>
           This deletes your course, your XP, your {profile.streak}-day streak and everything the scheduler has
-          learned about you. It cannot be undone. Export first from the File menu if you might want it back.
+          learned about you. It cannot be undone. Export it first{isElectron ? ' from the File menu' : ''} if you
+          might want it back.
         </p>
         <div className="row" style={{ gap: 8, marginTop: 24, justifyContent: 'flex-end' }}>
           <Button variant="ghost" onClick={() => setConfirmReset(false)}>

@@ -629,6 +629,10 @@
   color: var(--text-body);
   border-color: var(--line-strong);
 }
+.runbadge--browser {
+  color: var(--text-body);
+  border-color: var(--line-strong);
+}
 .runbadge--static {
   color: var(--streak);
   border-color: #6d5a33;

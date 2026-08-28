@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Codeling's home-screen icon: Bit's face, which is the thing people
+       recognise, on the app's own black. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#101015" />
+      <stop offset="1" stop-color="#030304" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#ground)" />
+
+  <g transform="translate(0 18)">
+    <!-- antenna, ending in a text caret -->
+    <path d="M256 168 C 250 122, 268 104, 292 92" fill="none" stroke="#ffffff" stroke-width="13"
+      stroke-linecap="round" />
+    <rect x="284" y="62" width="17" height="38" rx="3" fill="#ffffff" transform="rotate(14 292 81)" />
+
+    <!-- head -->
+    <rect x="128" y="168" width="256" height="200" rx="56" fill="#ffffff" />
+
+    <!-- eyes -->
+    <circle cx="205" cy="248" r="24" fill="#050506" />
+    <circle cx="307" cy="248" r="24" fill="#050506" />
+
+    <!-- mouth -->
+    <path d="M212 300 Q 256 336, 300 300" fill="none" stroke="#050506" stroke-width="16"
+      stroke-linecap="round" />
+
+    <!-- the bracket "arms" -->
+    <path d="M104 236 L 74 268 L 104 300" fill="none" stroke="#ffffff" stroke-width="15"
+      stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M408 236 L 438 268 L 408 300" fill="none" stroke="#ffffff" stroke-width="15"
+      stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

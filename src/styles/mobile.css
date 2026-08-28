@@ -1,0 +1,964 @@
+/* ============================================================
+   Codeling on a phone
+   The desktop stylesheet still does the talking; this one changes
+   the posture. Full-height shell, safe areas honoured, every
+   target a thumb can hit, and the motion a phone expects.
+   ============================================================ */
+
+:root {
+  --tabbar-h: 58px;
+  --mhead-h: 52px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+html {
+  /* Stops iOS enlarging type in landscape, which reflows everything. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* No page-level bounce: the panels scroll, the app does not. */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  overflow: hidden;
+}
+
+/* A tap should never be interpreted as "maybe a double-tap zoom", which is
+   what causes the 300ms lag people read as a slow app. */
+button,
+a,
+[role='button'],
+[role='switch'],
+input,
+label,
+summary {
+  touch-action: manipulation;
+}
+
+.mapp {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: calc(var(--vh, 1vh) * 100);
+  height: 100dvh;
+  overflow: hidden;
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+.mapp--boot {
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+/* Full-screen takeovers: lesson, results, wizard. */
+.mview {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.mview--rise {
+  animation: mrise 320ms var(--ease-out);
+}
+@keyframes mrise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------- header */
+.mhead {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: calc(var(--mhead-h) + var(--safe-top));
+  padding: var(--safe-top) var(--sp-4) 0;
+  background: linear-gradient(var(--bg) 74%, transparent);
+  transition: height var(--t-med) var(--ease-out);
+}
+.mhead.is-collapsed {
+  height: calc(44px + var(--safe-top));
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg);
+}
+.mhead__mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--text);
+  color: var(--text-inverse);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+  transition: transform var(--t-med) var(--ease-spring);
+}
+.mhead.is-collapsed .mhead__mark {
+  transform: scale(0.86);
+}
+.mhead__title {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  color: var(--text);
+  line-height: 1;
+  transition: font-size var(--t-med) var(--ease-out);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mhead.is-collapsed .mhead__title {
+  font-size: var(--step-1);
+}
+.mhead__offline {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--streak);
+  border: 1px solid #6d5a33;
+  background: var(--streak-dim);
+  padding: 3px 8px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+.mhead__streak {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: none;
+}
+.mhead__streaknum {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  color: var(--streak);
+  line-height: 1;
+}
+.mhead__streaklabel {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* ---------------------------------------------------------- install bar */
+.minstallbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 var(--sp-4) 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  animation: fade-up var(--t-slow) var(--ease-out);
+}
+.minstallbar__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  min-width: 0;
+}
+.minstallbar__title {
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--text);
+}
+.minstallbar__note {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.minstallbar__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  color: var(--text-faint);
+}
+
+/* ---------------------------------------------------------- pager */
+.pager {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.pager__track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+.pager__panel {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* The panel scrolls; the page behind it must not. */
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--sp-5));
+}
+
+/* ---------------------------------------------------------- tab bar */
+.tabbar {
+  flex: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding-bottom: var(--safe-bottom);
+  /* Opaque enough that scrolling text does not read through it on displays
+     where backdrop-filter is unavailable or disabled. */
+  background: rgba(5, 5, 6, 0.96);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border-top: 1px solid var(--line-soft);
+}
+.tabbar__inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: var(--tabbar-h);
+}
+.tabbar__indicator {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 25%;
+  height: calc(100% - 12px);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  /* Driven by the pager, so it slides with a half-finished swipe. */
+  transform: translateX(calc(var(--pager-pos, 0) * 100%));
+  transition: background var(--t-fast) linear;
+  pointer-events: none;
+}
+.tabbar__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--text-faint);
+  min-height: 44px;
+  transition: color var(--t-fast) linear;
+}
+.tabbar__item.is-on {
+  color: var(--text);
+}
+.tabbar__icon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  transition: transform var(--t-med) var(--ease-spring);
+}
+.tabbar__item.is-on .tabbar__icon svg {
+  transform: translateY(-1px) scale(1.08);
+}
+.tabbar__item:active .tabbar__icon svg {
+  transform: scale(0.9);
+}
+.tabbar__label {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+/* ---------------------------------------------------------- sheet */
+.sheetwrap {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+}
+.sheet__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  animation: fade-in var(--t-med) linear;
+}
+.sheetwrap.is-closing .sheet__scrim {
+  animation: fade-out var(--t-med) linear forwards;
+}
+.sheet {
+  position: relative;
+  width: 100%;
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding-bottom: var(--safe-bottom);
+  animation: sheet-up 320ms var(--ease-out);
+  transition: transform 260ms var(--ease-out);
+  touch-action: none;
+}
+.sheetwrap.is-closing .sheet {
+  animation: sheet-down 260ms var(--ease-out) forwards;
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes sheet-down {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.sheet__grip {
+  display: block;
+  width: 38px;
+  height: 4px;
+  margin: 10px auto 4px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  flex: none;
+}
+.sheet__head {
+  padding: 8px var(--sp-5) 4px;
+  flex: none;
+}
+.sheet__head h4 {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  font-weight: 400;
+}
+.sheet__body {
+  padding: 10px var(--sp-5) var(--sp-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.installsteps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.installsteps li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: var(--step-0);
+  color: var(--text-body);
+  line-height: 1.5;
+}
+.installsteps__no {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  color: var(--text-inverse);
+  font-size: 12px;
+  font-weight: 600;
+}
+.installhint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: var(--step--1);
+}
+.installnote {
+  font-size: var(--step--1);
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------- confetti */
+.confetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 60;
+}
+
+/* ---------------------------------------------------------- home */
+.mhome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-2) var(--sp-4) 0;
+}
+.mhome__greet h2 {
+  font-size: var(--step-3);
+  margin-top: 2px;
+}
+
+.mstrip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.mstrip::-webkit-scrollbar {
+  display: none;
+}
+.mstat {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  min-width: 96px;
+}
+.mstat--ring {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.mstat.is-warn .mstat__value {
+  color: var(--streak);
+}
+.mstat__value {
+  font-family: var(--font-display);
+  font-size: var(--step-3);
+  line-height: 1;
+  color: var(--text);
+}
+.mstat__ringnum {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text);
+}
+.mstat__label {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  line-height: 1.3;
+}
+
+.mcontinue {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  overflow: hidden;
+}
+.mcontinue__bit {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0.95;
+  pointer-events: none;
+}
+.mcontinue h3 {
+  font-size: var(--step-2);
+  max-width: 62%;
+}
+.mcontinue__blurb {
+  font-size: var(--step--1);
+  line-height: 1.5;
+  max-width: 90%;
+}
+.mcontinue__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 6px;
+}
+.mcontinue__second {
+  align-self: center;
+  padding: 10px;
+  font-size: var(--step--1);
+  color: var(--text-muted);
+  min-height: 44px;
+}
+.mcontinue__second:disabled {
+  color: var(--text-faint);
+  opacity: 0.5;
+}
+
+/* A big, obviously-pressable button — the one control the app is built
+   around, and the only place a spring is worth the frames. */
+.mbtn {
+  min-height: 52px;
+  font-size: var(--step-1);
+  transition:
+    transform 140ms var(--ease-spring),
+    filter var(--t-fast) linear;
+}
+.mbtn:active {
+  transform: scale(0.975);
+}
+
+.mweak {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mweak__row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.mweak__row::-webkit-scrollbar {
+  display: none;
+}
+.mweak__card {
+  flex: 0 0 auto;
+  width: 148px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.mweak__name {
+  font-size: var(--step--1);
+  color: var(--text-body);
+}
+
+/* ---------------------------------------------------------- the path */
+.mpath {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding-top: var(--sp-2);
+}
+.mpath__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.mpath__head .muted {
+  font-size: var(--step--1);
+}
+.mpath__unit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mpath__unithead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+.mpath__unitno {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.mpath__unithead h5 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--step--1);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mpath__unithead::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.mnode {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 8px 0;
+  text-align: left;
+  animation: fade-up 420ms var(--ease-out) backwards;
+}
+/* One dashed rail per unit, running behind the dots. Drawn on the unit
+   rather than between the nodes so it can never end up half a pixel out of
+   line with a row whose blurb happens to wrap. */
+.mpath__unit {
+  position: relative;
+}
+.mpath__unit::before {
+  content: '';
+  position: absolute;
+  left: 27px;
+  top: 62px;
+  bottom: 44px;
+  width: 2px;
+  background: repeating-linear-gradient(var(--line-strong) 0 4px, transparent 4px 9px);
+}
+.mnode__dot {
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  /* Opaque, so the rail passes behind it rather than through it. */
+  background: var(--bg);
+  transition: transform 180ms var(--ease-spring);
+}
+.mnode:active .mnode__dot {
+  transform: scale(0.93);
+}
+.mnode__pct {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--text-body);
+}
+.mnode__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mnode__title {
+  font-size: var(--step-0);
+  color: var(--text-body);
+}
+.mnode__blurb {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.mnode.is-locked {
+  opacity: 0.42;
+}
+.mnode.is-done .mnode__title {
+  color: var(--text-muted);
+}
+.mnode.is-current .mnode__title {
+  color: var(--text);
+  font-weight: 600;
+}
+/* The one node that matters gets a heartbeat. */
+.mnode.is-current .mnode__dot {
+  animation: node-pulse 2.4s var(--ease-out) infinite;
+  border-radius: var(--r-pill);
+}
+@keyframes node-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.16);
+  }
+  40% {
+    box-shadow: 0 0 0 9px rgba(255, 255, 255, 0);
+  }
+}
+
+.skilldetail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.skilldetail__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.skilldetail__bar > :first-child {
+  flex: 1;
+}
+.skilldetail__pct {
+  font-family: var(--font-display);
+  font-size: var(--step-1);
+  color: var(--text);
+}
+.skilldetail__note {
+  font-size: var(--step--1);
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------- settings */
+.msettings {
+  display: flex;
+  flex-direction: column;
+}
+.msettings > .settings__group {
+  margin: var(--sp-4) var(--sp-4) 0;
+}
+.settingrow__control--wrap {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   The shared screens, in a phone's proportions
+   ============================================================ */
+.stats,
+.library,
+.settings {
+  padding: var(--sp-4) var(--sp-4) var(--sp-6);
+  gap: var(--sp-5);
+}
+.stats__head h2,
+.library__head h2,
+.settings__head h2 {
+  font-size: var(--step-3);
+}
+.stats__row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.metric__value {
+  font-size: var(--step-3);
+}
+.cal {
+  grid-template-rows: repeat(7, 11px);
+  grid-auto-columns: 11px;
+  gap: 2px;
+}
+.library__grid {
+  grid-template-columns: 1fr !important;
+}
+
+/* --- wizard ---------------------------------------------------------- */
+.wizard__progress {
+  padding: calc(var(--safe-top) + var(--sp-3)) var(--sp-4) 0;
+}
+.wizard__stage {
+  padding: var(--sp-5) var(--sp-4) var(--sp-5);
+}
+.wizard__foot {
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + var(--safe-bottom));
+  gap: var(--sp-3);
+  align-items: center;
+}
+.wizard__mascot {
+  /* The speech bubble is lovely and there is no room for it beside the
+     buttons on a 390px screen. */
+  display: none;
+}
+.wizard__actions {
+  flex: 1;
+  justify-content: space-between;
+}
+.wizard__actions .btn {
+  min-height: 48px;
+}
+.welcome {
+  padding-top: var(--sp-3);
+}
+.welcome h1 {
+  font-size: var(--step-4);
+}
+.welcome__facts {
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+  margin-top: var(--sp-5);
+}
+
+/* --- lesson ---------------------------------------------------------- */
+.lesson__bar {
+  padding: calc(var(--safe-top) + 10px) var(--sp-4) 10px;
+  gap: var(--sp-3);
+}
+.lesson__quit {
+  width: 40px;
+  height: 40px;
+  margin-left: -8px;
+}
+.lesson__body {
+  padding: var(--sp-4) var(--sp-4) var(--sp-6);
+  align-items: flex-start;
+}
+.lesson__prompt {
+  font-size: var(--step-2);
+}
+.lesson__footinner {
+  padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + var(--safe-bottom));
+}
+.lesson__foot {
+  /* Slides up with the verdict rather than appearing under it. */
+  animation: foot-in 260ms var(--ease-out);
+}
+@keyframes foot-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.lesson__controls .btn {
+  min-height: 48px;
+}
+.verdict {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+/* The desktop stylesheet hides Bit below 720px to save room. On the phone it
+   is the whole point of the moment, so it comes back — smaller. */
+.verdict__mascot {
+  display: block !important;
+  margin: -18px 0 -18px -14px;
+}
+.verdict__mascot > * {
+  width: 62px !important;
+  height: 62px !important;
+}
+.verdict__text {
+  flex: 1 1 55%;
+}
+.verdict__line {
+  font-size: var(--step-1);
+}
+.verdict .btn {
+  flex: 1 0 100%;
+  min-height: 52px;
+  justify-content: center;
+}
+
+/* --- results --------------------------------------------------------- */
+.results {
+  padding: calc(var(--safe-top) + var(--sp-5)) var(--sp-4) calc(var(--sp-6) + var(--safe-bottom));
+  gap: var(--sp-5);
+}
+.results__head h1 {
+  font-size: var(--step-4);
+}
+.scoreline__big {
+  font-size: var(--step-5);
+}
+.results__foot {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-4);
+}
+.results__foot .row {
+  flex-direction: column-reverse;
+  gap: 8px;
+}
+.results__foot .btn {
+  width: 100%;
+  min-height: 50px;
+  justify-content: center;
+}
+
+/* --- exercises ------------------------------------------------------- */
+/* Everything a finger has to hit gets bigger, and anything that scrolls
+   sideways keeps its own gestures away from the pager. */
+.option,
+.tile,
+.orderline,
+.matchcell {
+  min-height: 46px;
+}
+.editor,
+.runpanel,
+.wire,
+.term {
+  touch-action: pan-y;
+}
+/* The wire graph is a drag surface of its own; the pager must not steal it. */
+.wire {
+  touch-action: none;
+}
+.runbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.runbar .kbd {
+  display: none;
+}
+.wire__pinhit {
+  /* A 10px SVG pin is a mouse target, not a thumb target. */
+  r: 15;
+}
+
+/* --- dialogues ------------------------------------------------------- */
+.modal-scrim {
+  padding: var(--sp-4);
+  padding-top: calc(var(--safe-top) + var(--sp-4));
+  padding-bottom: calc(var(--safe-bottom) + var(--sp-4));
+}
+.modal {
+  padding: var(--sp-5);
+  max-height: 80dvh;
+}
+.modal .btn {
+  min-height: 46px;
+}
+
+/* --- toasts sit above the tab bar ------------------------------------ */
+.toasts {
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 12px) !important;
+  left: var(--sp-4) !important;
+  right: var(--sp-4) !important;
+  transform: none !important;
+  align-items: stretch !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mnode.is-current .mnode__dot {
+    animation: none;
+  }
+  .mview--rise,
+  .minstallbar,
+  .mnode {
+    animation: none;
+  }
+}

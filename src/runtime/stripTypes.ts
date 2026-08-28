@@ -104,6 +104,12 @@ function stripCodeSegment(src: string): string {
     /^[ \t]*(export\s+)?(interface|type)\s+[A-Za-z_$][\w$]*[^\n]*?\{[\s\S]*?\n[ \t]*\}[ \t]*;?[ \t]*$/gm,
     '',
   );
+  // The same declarations written on one line, which the block form above
+  // misses because it insists on a closing brace of its own.
+  out = out.replace(
+    /^[ \t]*(export\s+)?interface\s+[A-Za-z_$][\w$]*[^\n{]*\{[^\n}]*\}[ \t]*;?[ \t]*$/gm,
+    '',
+  );
   out = out.replace(/^[ \t]*(export\s+)?type\s+[A-Za-z_$][\w$]*\s*(<[^>]*>)?\s*=[^\n;]*;?[ \t]*$/gm, '');
   out = out.replace(/^[ \t]*declare\s+[^\n]*$/gm, '');
   out = out.replace(/^[ \t]*import\s+type\s+[^\n]*$/gm, '');

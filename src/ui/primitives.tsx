@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import {
   createContext,
   useCallback,
@@ -218,12 +219,17 @@ export function Modal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Rendered into the body rather than in place: `position: fixed` resolves
+  // against the nearest transformed ancestor, and on the phone build every
+  // screen lives inside a translated pager track — a dialogue left in the
+  // tree would be centred on a page three screens to the left.
+  return createPortal(
     <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby={labelledBy} tabIndex={-1} ref={ref}>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

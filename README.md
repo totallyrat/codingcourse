@@ -12,6 +12,9 @@ network unplugged.
 13 tracks   ·   82 skills   ·   235 concepts   ·   438 exercises   ·   10 element types
 ```
 
+Desktop app for Windows, macOS and Linux. Installable phone app for iPhone and
+Android, from the browser — no store, no account.
+
 ---
 
 ## Getting it
@@ -25,6 +28,27 @@ get a desktop and Start-menu shortcut, uninstall from Settings like anything els
 
 > Builds are unsigned, so Windows SmartScreen shows a warning the first time.
 > "More info" → "Run anyway", or build it yourself from source below.
+
+### Put it on your phone
+
+**<https://totallyrat.github.io/codingcourse/>** — open that on the phone and add
+it to the home screen. On iPhone: Share → **Add to Home Screen** → Add. On
+Android, Chrome offers **Install app** by itself. The app says so too, the first
+time you finish a lesson.
+
+Installed, it is a real app: its own icon, its own launch screen, full screen
+with no browser chrome, and **it works with no network at all** — the lessons,
+the Python interpreter and the typefaces are all stored on the device the first
+time it loads. Nothing needs an account and nothing leaves the phone.
+
+> **On the EU's alternative app stores.** The DMA did open iOS to other
+> marketplaces, but the door has a height limit: Apple requires an
+> *organisation* developer account that has existed for two continuous years
+> and an app with over a million first installs in the EU in the previous
+> calendar year, and every build still goes through Apple's notarisation. A new
+> app cannot qualify, in the EU or anywhere else. A home-screen install needs
+> none of it — no developer account, no notarisation, no annual fee — which is
+> why that is the route this app takes.
 
 ### Run it from source
 
@@ -136,7 +160,11 @@ Every one has a keyboard path. Nothing is mouse-only.
    distinction, f-strings, comprehensions, classes and about forty builtins. It
    is checked against real CPython by
    [26 differential tests](src/runtime/minipy.parity.test.ts).
-3. **JavaScript and TypeScript always run**, on Electron's own Node.
+3. **JavaScript and TypeScript always run.** On the desktop, on Electron's own
+   Node. On a phone, in a Worker built from a blob — the learner's code is
+   pasted in as source rather than handed to `eval`, so the page needs no
+   `unsafe-eval`, and a `while (true)` is dealt with by terminating the worker
+   rather than by hoping.
 4. **Otherwise, structure checks only** — and the badge says exactly that rather
    than pretending the program ran.
 
@@ -147,12 +175,21 @@ Every one has a keyboard path. Nothing is mouse-only.
 ```
 electron/        main process: window, menu, atomic JSON persistence, code runner
 src/engine/      types, course builder, SM-2 scheduler, lesson composer, grader
-src/runtime/     MiniPy interpreter, TypeScript stripper, unified run entry point
+src/runtime/     MiniPy interpreter, TypeScript stripper, browser JS sandbox
 src/content/     13 tracks — the whole library, as plain data
 src/components/  the ten exercise elements
 src/mascot/      Bit
 src/screens/     wizard, home, lesson, results, progress, library, settings
+src/mobile/      the phone build: shell, tab pager, sheets, install flow
 ```
+
+Both builds share the engine, the content, the exercise elements and the
+mascot. What differs is the shell — and the shell is where a phone is not a
+small desktop: four tabs you can swipe between with the indicator tracking your
+thumb, a course that reads as a path you scroll rather than a grid you scan,
+sheets you throw away downwards, the safe areas honoured on a notched screen,
+haptics on every answer, and — because there is no cursor for Bit to watch —
+the option to let it follow the tilt of the phone instead.
 
 **Bit**, the mascot, runs on one `requestAnimationFrame` loop writing SVG
 attributes directly — no React renders. A critically-damped spring drives the
@@ -176,8 +213,11 @@ are in the File menu. Nothing leaves the machine.
 ```bash
 npm install
 npm run dev      # app with hot reload
-npm test         # 180 tests
-npm run build    # typecheck + bundle
+npm test         # 190 tests
+npm run build    # typecheck + bundle (desktop)
+npm run dev:mobile   # the phone build, with hot reload
+npm run build:mobile # phone build + generated service worker -> dist-mobile/
+npm run icons        # re-render the app icon and the iOS launch screens
 ```
 
 The test suite is the interesting part:
@@ -195,6 +235,19 @@ The test suite is the interesting part:
   a teaching app can have is one where the correct answer is marked wrong.
 - **`src/runtime/stripTypes.test.ts`** — mostly cases a naive type-stripper gets
   wrong: object literals, ternaries, switch labels, labelled loops.
+
+### The phone build
+
+`npm run build:mobile` runs the bundle and then writes `dist-mobile/sw.js` from
+the file list of that exact build — hashed names and all — so the precache is
+the real output rather than a guess that quietly rots. The icons and the twelve
+iPhone launch screens are rendered from
+[`assets/icon.svg`](assets/icon.svg) by headless Chromium
+([`scripts/build-icons.mjs`](scripts/build-icons.mjs)) and committed, so no
+image library is needed to build the app.
+
+Pushing to the default branch deploys it to GitHub Pages
+([`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
 
 ### Adding content
 
