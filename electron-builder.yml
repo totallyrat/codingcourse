@@ -1,0 +1,60 @@
+appId: app.codeling.desktop
+productName: Codeling
+copyright: MIT licensed
+
+directories:
+  output: release/${version}
+  buildResources: build
+
+# Only what the app needs at runtime. Sources, tests and the content authoring
+# files are compiled into dist/ and must not be shipped twice.
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+# Node modules are bundled by Vite, so nothing needs unpacking.
+asar: true
+compression: maximum
+
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  icon: build/icon.png
+  artifactName: Codeling-Setup-${version}-${arch}.${ext}
+  # Unsigned builds are normal for a project like this; SmartScreen will warn
+  # on first run until the download has a reputation or a certificate.
+  signAndEditExecutable: true
+
+nsis:
+  # A real installer wizard rather than a one-click drop: people expect to
+  # choose where a desktop app goes, and to be able to uninstall it.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Codeling
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  license: LICENSE
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  icon: build/icon.png
+  category: public.app-category.education
+
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: build/icon.png
+  category: Education
+  synopsis: Learn to code the way you learn a language
