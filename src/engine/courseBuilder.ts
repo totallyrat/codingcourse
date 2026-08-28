@@ -129,7 +129,7 @@ function skillFit(skill: Skill, answers: WizardAnswers): { score: number; reason
   }
   if (GOAL_TAGS[answers.goal]?.some((t) => skill.tags.includes(t))) {
     score += 0.2;
-    reasons.push(`serves your ${GOAL_LABEL[answers.goal].toLowerCase()} goal`);
+    reasons.push(`serves your goal of ${GOAL_LABEL[answers.goal].toLowerCase()}`);
   }
 
   const rank = EXPERIENCE_RANK[answers.experience];
@@ -260,10 +260,17 @@ export function buildCourse(track: Track, answers: WizardAnswers): Course {
   };
 }
 
-/** Items per lesson, from the daily time budget. Kept honest at both ends. */
+/**
+ * Items per lesson, from the daily time budget.
+ *
+ * 45 seconds is the honest average once write-and-run exercises are in the
+ * mix: a multiple choice takes fifteen, a program takes three minutes. The cap
+ * matters more than the arithmetic — past about fifteen items a lesson stops
+ * feeling like a session and starts feeling like an exam.
+ */
 export function slotsForBudget(minutesPerDay: number): number {
-  const perItemSeconds = 34;
-  return Math.max(7, Math.min(18, Math.round((minutesPerDay * 60) / perItemSeconds)));
+  const perItemSeconds = 45;
+  return Math.max(6, Math.min(16, Math.round((minutesPerDay * 60) / perItemSeconds)));
 }
 
 /* --------------------------------------------------------------- labels */

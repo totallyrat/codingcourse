@@ -35,7 +35,7 @@ const skills: Skill[] = [
   {
     id: 'gd.signals',
     title: 'Signals',
-    blurb: 'Godot s answer to coupling: shout upwards, call downwards.',
+    blurb: "Godot's answer to coupling: shout upwards, call downwards.",
     concepts: ['gd.signals', 'gd.connect'],
     requires: ['gd.lifecycle'],
     level: 'applied',
@@ -308,7 +308,7 @@ export const godotExercises = forTrack('godot', [
     concepts: ['gd.connect'],
     difficulty: 5,
     kind: 'assemble',
-    prompt: 'Connect the player s health_changed signal to _on_health_changed.',
+    prompt: "Connect the player's health_changed signal to _on_health_changed.",
     lang: 'gdscript',
     answer: ['player', '.', 'health_changed', '.', 'connect', '(', '_on_health_changed', ')'],
     distractors: ['emit', 'signal', 'bind'],

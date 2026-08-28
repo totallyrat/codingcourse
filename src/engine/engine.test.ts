@@ -117,8 +117,9 @@ describe('course builder', () => {
 
   it('scales lesson length to the daily time budget', () => {
     expect(slotsForBudget(5)).toBeLessThan(slotsForBudget(30));
-    expect(slotsForBudget(1)).toBeGreaterThanOrEqual(7);
-    expect(slotsForBudget(600)).toBeLessThanOrEqual(18);
+    // Even a one-minute budget is still a lesson, and no budget makes it an exam.
+    expect(slotsForBudget(1)).toBeGreaterThanOrEqual(6);
+    expect(slotsForBudget(600)).toBeLessThanOrEqual(16);
   });
 });
 
@@ -206,6 +207,63 @@ describe('lesson composer', () => {
         expect(new Set(run).size, `${track.id} had three ${run[0]} in a row`).toBeGreaterThan(1);
       }
     }
+  });
+
+  it('never reaches far ahead of the learner to pad a lesson', () => {
+    // A dictionary question in somebody's first lesson is the failure this
+    // guards against. A short skill legitimately has to borrow to fill a long
+    // lesson, but it must borrow from the next thing along, never skip ahead:
+    // the skills a lesson touches have to form an unbroken run from the start
+    // of the syllabus.
+    for (const track of TRACKS) {
+      const profile = freshProfile(track.id);
+      const course = profile.course!;
+      const lesson = composeLesson({
+        profile,
+        course,
+        track,
+        library: exercisesForTrack(track.id),
+        slots: 16,
+      });
+
+      const skillOf = new Map<string, number>();
+      course.syllabus.forEach((id, i) => {
+        for (const concept of track.skills.find((s) => s.id === id)?.concepts ?? []) {
+          if (!skillOf.has(concept)) skillOf.set(concept, i);
+        }
+      });
+
+      const touched = new Set<number>();
+      for (const slot of lesson.slots) {
+        for (const concept of slot.exercise.concepts) {
+          const at = skillOf.get(concept);
+          if (at !== undefined) touched.add(at);
+        }
+      }
+      const highest = Math.max(...touched);
+      for (let i = 0; i <= highest; i++) {
+        expect(touched.has(i), `${track.id}: lesson skipped past syllabus position ${i} to reach ${highest}`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it('leads a lesson with its own material, not with padding', () => {
+    const profile = freshProfile();
+    const track = trackById('python')!;
+    const lesson = composeLesson({
+      profile,
+      course: profile.course!,
+      track,
+      library: exercisesForTrack('python'),
+      slots: 16,
+    });
+    const skill = track.skills.find((s) => s.id === lesson.skillId)!;
+    const firstThree = lesson.slots.slice(0, 3);
+    expect(
+      firstThree.every((s) => s.exercise.concepts.some((c) => skill.concepts.includes(c))),
+    ).toBe(true);
   });
 
   it('advances through the syllabus as skills are mastered', () => {

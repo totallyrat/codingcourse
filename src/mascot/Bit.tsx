@@ -332,8 +332,8 @@ export function Bit({
           : 0;
       armAmt = lerp(armAmt, pose.arms, Math.min(1, dt * 8));
       const armDeg = (armAmt + flap) * 34;
-      armLRef.current?.setAttribute('transform', `rotate(${(-armDeg).toFixed(1)} 64 152)`);
-      armRRef.current?.setAttribute('transform', `rotate(${armDeg.toFixed(1)} 136 152)`);
+      armLRef.current?.setAttribute('transform', `rotate(${(-armDeg).toFixed(1)} 56 152)`);
+      armRRef.current?.setAttribute('transform', `rotate(${armDeg.toFixed(1)} 144 152)`);
 
       // ---- decorations ----------------------------------------------------
       const celebrating = moodRef.current === 'celebrate' || moodRef.current === 'happy';
@@ -402,7 +402,7 @@ export function Bit({
           {/* bracket arms — the coding motif, doubling as the creature's hands */}
           <path
             ref={armLRef}
-            d="M70 136 L56 152 L70 168"
+            d="M62 134 L46 152 L62 170"
             stroke="#ffffff"
             strokeWidth="7"
             strokeLinecap="round"
@@ -411,7 +411,7 @@ export function Bit({
           />
           <path
             ref={armRRef}
-            d="M130 136 L144 152 L130 168"
+            d="M138 134 L154 152 L138 170"
             stroke="#ffffff"
             strokeWidth="7"
             strokeLinecap="round"

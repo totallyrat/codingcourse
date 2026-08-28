@@ -403,7 +403,7 @@ export const gitExercises = forTrack('git', [
       'You are offline',
     ],
     answer: [0],
-    explain: 'Force-pushing here would delete somebody else s work. Pull, resolve, push.',
+    explain: "Force-pushing here would delete somebody else's work. Pull, resolve, push.",
   },
   {
     id: 'git.remote.1',

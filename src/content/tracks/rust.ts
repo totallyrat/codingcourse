@@ -187,7 +187,7 @@ export const rustExercises = forTrack('rust', [
     kind: 'choice',
     prompt: 'What is the difference between String and &str?',
     options: [
-      'String owns its bytes and can grow; &str borrows a view of somebody else s',
+      "String owns its bytes and can grow; &str borrows a view of somebody else's",
       '&str is faster to print',
       'String is only for ASCII',
       'They are aliases',

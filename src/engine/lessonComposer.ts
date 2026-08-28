@@ -44,6 +44,15 @@ export interface ComposeInput {
 
 const RECHECK_SHARE = 0.4;
 
+/** Ordering preference when two items of the same type compete for a slot. */
+const SOURCE_RANK: Record<LessonSlotSource, number> = {
+  warmup: 0,
+  recheck: 1,
+  new: 2,
+  review: 3,
+  stretch: 4,
+};
+
 /** How well the learner knows a skill right now, 0..1. */
 export function skillMastery(profile: Profile, skill: Skill): number {
   if (!skill.concepts.length) return 0;
@@ -124,9 +133,24 @@ function chooseForConcept(
   profile: Profile,
   used: Set<ExerciseId>,
   rand: () => number,
-  opts: { targetDifficulty?: number; avoidKinds?: ExerciseKind[]; kindCounts?: Map<ExerciseKind, number> } = {},
+  opts: {
+    targetDifficulty?: number;
+    avoidKinds?: ExerciseKind[];
+    kindCounts?: Map<ExerciseKind, number>;
+    /** Concepts the learner has reached; an exercise is only served if this is
+     *  what it is mainly *about*. */
+    allowPrimary?: Set<string>;
+  } = {},
 ): Exercise | null {
-  const candidates = (index.byConcept.get(concept) ?? []).filter((ex) => !used.has(ex.id));
+  const candidates = (index.byConcept.get(concept) ?? []).filter((ex) => {
+    if (used.has(ex.id)) return false;
+    // An exercise is indexed under every concept it touches, which is what
+    // lets a dictionary question also count as KeyError practice. But it must
+    // not be *served* for KeyError before dictionaries have been taught, or
+    // lesson one hands a beginner something from unit nine.
+    if (opts.allowPrimary && !opts.allowPrimary.has(ex.concepts[0])) return false;
+    return true;
+  });
   if (!candidates.length) return null;
 
   const strength = decayedStrength(memoryFor(profile, concept), profile.lessonIndex);
@@ -179,15 +203,27 @@ function arrange(slots: LessonSlot[], rand: () => number): LessonSlot[] {
   const out: LessonSlot[] = [];
   const isGentle = (s: LessonSlot) => s.exercise.kind !== 'write' && s.exercise.difficulty <= 3;
 
-  // Open with something gentle: the first item decides whether this feels like
-  // a lesson or an exam.
+  // Open with something gentle from the lesson's own material: the first item
+  // decides whether this feels like a lesson or an exam, and it should be
+  // about the thing the lesson is for.
+  let warmKind: ExerciseKind | null = null;
+  let warmIdx = -1;
+  let warmRank = Infinity;
   for (const [kind, list] of buckets) {
-    const idx = list.findIndex(isGentle);
-    if (idx >= 0) {
-      out.push(...list.splice(idx, 1));
-      if (!list.length) buckets.delete(kind);
-      break;
+    for (let i = 0; i < list.length; i++) {
+      if (!isGentle(list[i])) continue;
+      const rank = SOURCE_RANK[list[i].source] * 10 + list[i].exercise.difficulty;
+      if (rank < warmRank) {
+        warmRank = rank;
+        warmKind = kind;
+        warmIdx = i;
+      }
     }
+  }
+  if (warmKind !== null) {
+    const list = buckets.get(warmKind)!;
+    out.push(...list.splice(warmIdx, 1));
+    if (!list.length) buckets.delete(warmKind);
   }
 
   while (out.length < slots.length) {
@@ -216,8 +252,11 @@ function arrange(slots: LessonSlot[], rand: () => number): LessonSlot[] {
     if (bestKind === null) break;
 
     const list = buckets.get(bestKind)!;
-    // Within a type, put the easier item first so difficulty ramps up.
-    list.sort((a, b) => a.exercise.difficulty - b.exercise.difficulty);
+    // Within a type: the lesson's own material first, then by difficulty, so
+    // padding drawn from elsewhere never leads the lesson.
+    list.sort(
+      (a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || a.exercise.difficulty - b.exercise.difficulty,
+    );
     out.push(list.shift()!);
     if (!list.length) buckets.delete(bestKind);
   }
@@ -242,6 +281,20 @@ export function composeLesson(input: ComposeInput): Lesson {
   const rand = mulberry32(hashString(`${profile.id}:${profile.lessonIndex}:${mode}`));
   const skill = activeSkill(profile, course, track);
   const slotCount = input.slots ?? 12;
+
+  // Everything taught so far, plus the one skill immediately ahead. Exercises
+  // are only served when this is what they are mainly about.
+  const conceptsOf = (id: SkillId) => track.skills.find((s) => s.id === id)?.concepts ?? [];
+  const position = course.syllabus.indexOf(skill.id);
+  const reached = new Set<string>(
+    course.syllabus.slice(0, position < 0 ? 1 : position + 2).flatMap(conceptsOf),
+  );
+  for (const c of skill.concepts) reached.add(c);
+  // Anything already practised stays available for review even if the course
+  // was switched and the syllabus no longer contains it.
+  for (const c of Object.keys(profile.concepts)) {
+    if (profile.concepts[c].seen > 0) reached.add(c);
+  }
 
   const used = new Set<ExerciseId>();
   const chosen: LessonSlot[] = [];
@@ -271,7 +324,10 @@ export function composeLesson(input: ComposeInput): Lesson {
   let reviews = 0;
   for (const concept of dueConcepts(profile, profile.lessonIndex)) {
     if (reviews >= reviewCap || chosen.length >= slotCount) break;
-    const ex = chooseForConcept(concept, index, profile, used, rand, { kindCounts });
+    const ex = chooseForConcept(concept, index, profile, used, rand, {
+      kindCounts,
+      allowPrimary: reached,
+    });
     if (ex && add(ex, 'review')) reviews++;
   }
 
@@ -293,6 +349,7 @@ export function composeLesson(input: ComposeInput): Lesson {
           targetDifficulty: Math.min(5, 1 + pass + Math.round(decayedStrength(memoryFor(profile, concept), profile.lessonIndex) * 2)),
           avoidKinds: seenKinds,
           kindCounts,
+          allowPrimary: reached,
         });
         if (ex) add(ex, 'new');
       }
@@ -305,24 +362,50 @@ export function composeLesson(input: ComposeInput): Lesson {
     const ahead = course.syllabus.indexOf(skill.id) + 1;
     const nextSkill = track.skills.find((s) => s.id === course.syllabus[ahead]);
     for (const concept of nextSkill?.concepts ?? []) {
-      const ex = chooseForConcept(concept, index, profile, used, rand, { targetDifficulty: 2, kindCounts });
+      const ex = chooseForConcept(concept, index, profile, used, rand, {
+        targetDifficulty: 2,
+        kindCounts,
+        allowPrimary: reached,
+      });
       if (ex && add(ex, 'stretch')) break;
     }
   }
 
   // --- backfill -----------------------------------------------------------
-  // A brand-new profile has no history to draw on, and a nearly-finished
-  // course can run out of due material; either way the lesson still has to be
-  // a full lesson. Widen to the whole track, nearest concepts first.
+  // A skill with few exercises cannot fill a long lesson on its own, and a
+  // nearly-finished course runs out of due material; either way the lesson
+  // still has to be a full lesson.
+  //
+  // The widening is deliberately bounded. Reaching forward into the whole
+  // syllabus would put a dictionary question in somebody's first ever lesson,
+  // which is exactly the kind of thing that makes a course feel like it is not
+  // paying attention. So it draws only on ground already covered, plus the one
+  // skill immediately ahead.
   if (chosen.length < slotCount) {
-    const nearby = [
-      ...skill.concepts,
-      ...course.syllabus.flatMap((id) => track.skills.find((s) => s.id === id)?.concepts ?? []),
-    ];
+    const nearby = [...skill.concepts, ...reached];
     for (const concept of nearby) {
       if (chosen.length >= slotCount) break;
-      const ex = chooseForConcept(concept, index, profile, used, rand, { kindCounts });
+      const ex = chooseForConcept(concept, index, profile, used, rand, {
+        kindCounts,
+        allowPrimary: reached,
+      });
       if (ex) add(ex, mode === 'review' ? 'review' : 'new');
+    }
+    // Still short: step forward one skill at a time, opening each up as we go,
+    // so a learner near the end of a course never gets a truncated lesson and
+    // one near the start never leaps ahead.
+    for (const id of course.syllabus) {
+      if (chosen.length >= slotCount) break;
+      const conceptsHere = conceptsOf(id);
+      for (const c of conceptsHere) reached.add(c);
+      for (const concept of conceptsHere) {
+        if (chosen.length >= slotCount) break;
+        const ex = chooseForConcept(concept, index, profile, used, rand, {
+          kindCounts,
+          allowPrimary: reached,
+        });
+        if (ex) add(ex, mode === 'review' ? 'review' : 'new');
+      }
     }
   }
 

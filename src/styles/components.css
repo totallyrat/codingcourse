@@ -158,6 +158,10 @@
 .btn--ghost:active:not(:disabled) {
   transform: none;
 }
+/* :disabled re-adds the slab edge; a ghost button must never grow one. */
+.btn--ghost:disabled {
+  box-shadow: none;
+}
 .btn--outline {
   background: transparent;
   border-color: var(--line-strong);
