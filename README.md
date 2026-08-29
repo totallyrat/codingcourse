@@ -9,11 +9,12 @@ set of scoring functions over a library that ships inside the app. It works with
 network unplugged.
 
 ```
-13 tracks   ·   82 skills   ·   235 concepts   ·   438 exercises   ·   10 element types
+13 tracks · 111 skills · 318 concepts · 730 exercises · 10 element types · 10 levels
 ```
 
-Desktop app for Windows, macOS and Linux. Installable phone app for iPhone and
-Android, from the browser — no store, no account.
+One app, one shape. It is a phone app you install from the browser — no store,
+no account — and the Windows, macOS and Linux builds run the same phone-shaped
+UI in a window locked to those proportions.
 
 ---
 
@@ -93,6 +94,25 @@ working:
 - **the course it generated,** unit by unit, before you commit to it. Two people
   choosing Python get the same skills in a different order.
 
+### The ten-level ladder
+
+Every exercise sits on a level from 1 to 10 — authored where it matters,
+otherwise derived from how hard it is and how far into the track its skill
+sits. The learner has a level **per course**, and a lesson is drawn at it, with
+a single item from the rung above as the question they are allowed to fail.
+Early lessons are short (seven items at level one, sixteen at level ten),
+because seven you can answer beats sixteen that grind you down.
+
+Moving up is evidence, not luck:
+
+- a **run** of strong lessons at the current level — two at the bottom, four
+  near the top — promotes you;
+- **one** weak lesson only resets the run, because one lesson is noise;
+- two struggling lessons in a row eases the ladder back down a rung;
+- a lesson that was all easy revision **cannot** promote you at all, however
+  well it went. That is the difference between "ready for the next rung" and
+  "had an easy day".
+
 ### The scheduling algorithm
 
 Everything adaptive lives in [`src/engine/`](src/engine). It is deterministic,
@@ -129,6 +149,30 @@ hardest item never last.
 
 It is seeded from your profile id and the lesson number, so re-opening a lesson
 gives you the same lesson.
+
+### Gems and the shop
+
+Lessons pay gems (twelve, twenty for a perfect one). The shop sells five
+things, and every one of them maps onto a mechanic that already exists rather
+than being a number that only moves in the shop:
+
+| | |
+|---|---|
+| **Streak Saver** | one more of the freezes the scheduler already spends for you |
+| **Super Boost** | double XP for three lessons |
+| **Instant XP** | 150 XP, counted towards today's goal |
+| **Lesson Skip** | credits a skill as passed — it still comes back for review |
+| **Mystery Chest** | one of the other four, resolved in the engine on purchase |
+
+### The cast
+
+Five characters share one animation rig: a critically damped spring for the
+body, a Verlet chain for whatever is on their head, squash and stretch from
+vertical velocity, eyes that track and blink on their own schedule. Only the
+drawing changes — silhouette, palette, accessories. **Bit** runs the place,
+**Pip** cheers, **Byte** keeps the streak, **Nib** marks the mistakes and
+**Loop** brings back what you missed. One of them turns up to celebrate at the
+end of every lesson.
 
 ### The ten element types
 
@@ -179,17 +223,23 @@ src/runtime/     MiniPy interpreter, TypeScript stripper, browser JS sandbox
 src/content/     13 tracks — the whole library, as plain data
 src/components/  the ten exercise elements
 src/mascot/      Bit
-src/screens/     wizard, home, lesson, results, progress, library, settings
-src/mobile/      the phone build: shell, tab pager, sheets, install flow
+src/screens/     wizard, lesson, library, settings
+src/mascot/      the cast, and the one rig they all run on
+src/mobile/      the shell: course path, shop, profile, celebration, tab pager
 ```
 
-Both builds share the engine, the content, the exercise elements and the
-mascot. What differs is the shell — and the shell is where a phone is not a
-small desktop: four tabs you can swipe between with the indicator tracking your
-thumb, a course that reads as a path you scroll rather than a grid you scan,
-sheets you throw away downwards, the safe areas honoured on a notched screen,
-haptics on every answer, and — because there is no cursor for Bit to watch —
-the option to let it follow the tilt of the phone instead.
+There is one UI. The phone build and the desktop build load the same shell —
+the desktop window is simply locked to a phone's aspect and keeps its own
+title bar. That means one layout to design, one set of gestures to keep
+working, and no second-class version.
+
+The shell is built for a thumb: three tabs you can swipe between with the
+indicator tracking your finger, the course as a **path** you scroll — big
+round lesson nodes weaving down the screen, a card that opens over the one you
+press, section banners and a trophy at the end of each — sheets you throw away
+downwards, safe areas honoured on a notched screen, haptics on every answer,
+and, because there is no cursor for the mascots to watch, the option to let
+them follow the tilt of the phone instead.
 
 **Bit**, the mascot, runs on one `requestAnimationFrame` loop writing SVG
 attributes directly — no React renders. A critically-damped spring drives the
@@ -213,7 +263,7 @@ are in the File menu. Nothing leaves the machine.
 ```bash
 npm install
 npm run dev      # app with hot reload
-npm test         # 190 tests
+npm test         # 221 tests
 npm run build    # typecheck + bundle (desktop)
 npm run dev:mobile   # the phone build, with hot reload
 npm run build:mobile # phone build + generated service worker -> dist-mobile/

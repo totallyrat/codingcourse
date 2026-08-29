@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ToastHost, useToast } from '@/ui/primitives';
-import { Bit } from '@/mascot/Bit';
+import { TitleBar } from '@/ui/TitleBar';
+import { isElectron } from '@/lib/bridge';
+import { Mascot } from '@/mascot/Mascot';
 import { Wizard } from '@/screens/Wizard';
 import { Lesson, type LessonResult } from '@/screens/Lesson';
-import { Results } from '@/screens/Results';
-import { Stats } from '@/screens/Stats';
 import { Library } from '@/screens/Library';
-import { MobileHome } from './MobileHome';
+import { CoursePath } from './CoursePath';
+import { Shop, GemIcon } from './Shop';
+import { ProfileScreen } from './ProfileScreen';
+import { Celebration } from './Celebration';
 import { MobileSettings } from './MobileSettings';
 import { Pager } from './Pager';
 import { TabBar, TABS } from './TabBar';
-import { Confetti } from './Confetti';
 import { InstallSheet, dismissInstallBanner, installBannerDismissed } from './InstallSheet';
 import { currentPlatform } from './platform';
 import { restoreTilt } from './tilt';
@@ -18,28 +20,37 @@ import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/lib/useProfile';
 import { exercisesForTrack, trackById } from '@/content';
 import { composeLesson } from '@/engine/lessonComposer';
-import { slotsForBudget } from '@/engine/courseBuilder';
-import { completeLesson, createProfile, levelFor, setCourse, xpToday } from '@/engine/progress';
-import type { Course, Lesson as LessonModel } from '@/engine/types';
+import { lessonSize } from '@/engine/courseBuilder';
+import {
+  completeLesson,
+  createProfile,
+  levelFor,
+  setCourse,
+  spendLessonSkip,
+  type LessonReward,
+} from '@/engine/progress';
+import type { Course, Lesson as LessonModel, Skill } from '@/engine/types';
 
 type View =
   | { name: 'tabs' }
   | { name: 'wizard' }
+  | { name: 'library' }
+  | { name: 'settings' }
   | { name: 'lesson'; lesson: LessonModel }
-  | { name: 'results'; result: LessonResult; xpEarned: number };
+  | { name: 'done'; result: LessonResult; reward: LessonReward };
 
 /**
- * The phone build.
- *
- * Same engine, same content, same mascot; a different set of hands. Four tabs
- * you can swipe between, a lesson that takes the whole screen, and every
- * target sized for a thumb rather than a cursor. Lessons, results and the
- * wizard deliberately leave the tab bar behind — a lesson is somewhere you
- * are, not a page you are on.
+ * The app, on a phone-shaped screen — which is now every screen, desktop
+ * included. Three tabs you can swipe between, the course as a path, and
+ * lessons that take the whole display because a lesson is somewhere you are,
+ * not a page you are on.
  */
 export function MobileApp() {
   return (
     <ToastHost>
+      {/* On the desktop the window is phone-shaped, but it is still a window:
+          it keeps the app's own title bar and caption buttons. */}
+      {isElectron ? <TitleBar /> : null}
       <Shell />
       <div className="grain" aria-hidden="true" />
     </ToastHost>
@@ -79,8 +90,6 @@ function Shell() {
     };
   }, []);
 
-  // The service worker says when a newer build finished downloading. It is
-  // already on the device by then; the next launch picks it up.
   useEffect(() => {
     const onUpdate = () => toast('Update downloaded. It applies next time you open Codeling.', '·');
     window.addEventListener('codeling:update', onUpdate);
@@ -92,20 +101,21 @@ function Shell() {
       if (!profile?.course) return;
       const track = trackById(profile.course.trackId);
       if (!track) return;
+      const level = levelFor(profile, track.id).level;
       const lesson = composeLesson({
         profile,
         course: profile.course,
         track,
         library: exercisesForTrack(track.id),
         mode,
-        slots: slotsForBudget(profile.course.answers.minutesPerDay),
-        level: levelFor(profile, track.id).level,
+        slots: lessonSize(profile.course.answers.minutesPerDay, level),
+        level,
       });
       if (!lesson.slots.length) {
         toast('Nothing to practise right now — start a course lesson instead.', '·');
         return;
       }
-      window.scrollTo(0, 0);
+      haptic('tap');
       setView({ name: 'lesson', lesson });
     },
     [profile, toast],
@@ -113,9 +123,8 @@ function Shell() {
 
   const onFinishLesson = useCallback(
     (result: LessonResult) => {
-      haptic(result.perfect ? 'win' : 'select');
       update((p) => {
-        const { profile: next, xpEarned } = completeLesson(p, {
+        const reward = completeLesson(p, {
           correct: result.correct,
           total: result.total,
           seconds: result.seconds,
@@ -124,8 +133,8 @@ function Shell() {
           trackId: p.course?.trackId ?? '',
           atLevel: result.lesson.atLevel,
         });
-        setView({ name: 'results', result, xpEarned });
-        return next;
+        setView({ name: 'done', result, reward });
+        return reward.profile;
       });
     },
     [update],
@@ -140,11 +149,17 @@ function Shell() {
     [update],
   );
 
-  const leaveResults = useCallback(() => {
+  const useSkip = useCallback(
+    (skill: Skill) => {
+      update((p) => spendLessonSkip(p, skill));
+      haptic('win');
+      toast(`${skill.title} marked as passed. It will still come back for review.`, '✓');
+    },
+    [update, toast],
+  );
+
+  const leaveLesson = useCallback(() => {
     setView({ name: 'tabs' });
-    setTab(0);
-    // The moment to offer installation is after the first lesson, when the app
-    // has earned the ask — not on a cold first paint before anything happened.
     if (!installBannerDismissed() && platform.route !== 'installed' && platform.route !== 'desktop') {
       setInstallOpen(true);
       dismissInstallBanner();
@@ -155,7 +170,7 @@ function Shell() {
   if (loading || !profile) {
     return (
       <div className="mapp mapp--boot">
-        <Bit mood="idle" size={132} trackPointer={false} />
+        <Mascot mood="idle" size={132} trackPointer={false} />
         <p className="muted">Loading your progress…</p>
       </div>
     );
@@ -163,6 +178,7 @@ function Shell() {
 
   const needsWizard = !profile.course || view.name === 'wizard';
   const track = profile.course ? trackById(profile.course.trackId) : undefined;
+  const ladder = levelFor(profile, profile.course?.trackId ?? '');
 
   if (needsWizard) {
     return (
@@ -190,38 +206,120 @@ function Shell() {
     );
   }
 
-  if (view.name === 'results') {
-    const celebrate = view.result.perfect || xpToday(profile) >= profile.settings.dailyGoalXp;
+  if (view.name === 'done') {
     return (
       <div className="mapp">
-        <div className="mview mview--rise" key="results">
-          <Results
-            result={view.result}
-            profile={profile}
-            xpEarned={view.xpEarned}
-            onContinue={leaveResults}
+        <div className="mview mview--rise" key="done">
+          <Celebration
+            correct={view.result.correct}
+            total={view.result.total}
+            seconds={view.result.seconds}
+            xpEarned={view.reward.xpEarned}
+            gemsEarned={view.reward.gemsEarned}
+            boosted={view.reward.boosted}
+            level={view.reward.level}
+            streak={profile.streak}
+            seed={profile.lessonIndex}
+            onContinue={leaveLesson}
             onAgain={() => startLesson('course')}
           />
-          <Confetti run={celebrate} />
+        </div>
+      </div>
+    );
+  }
+
+  if (view.name === 'library') {
+    return (
+      <div className="mapp">
+        <TopBar
+          title="Library"
+          onBack={() => setView({ name: 'tabs' })}
+          gems={profile.gems}
+          streak={profile.streak}
+        />
+        <div className="mview" key="library">
+          <div className="pager__panel">
+            <Library
+              profile={profile}
+              onSwitch={(course) => {
+                update((p) => setCourse(p, course));
+                setView({ name: 'tabs' });
+                setTab(0);
+                toast('Course switched. Your progress carried over.', '✓');
+              }}
+              onRerunWizard={() => setView({ name: 'wizard' })}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view.name === 'settings') {
+    return (
+      <div className="mapp">
+        <TopBar
+          title="Settings"
+          onBack={() => setView({ name: 'tabs' })}
+          gems={profile.gems}
+          streak={profile.streak}
+        />
+        <div className="mview" key="settings">
+          <div className="pager__panel">
+            <MobileSettings
+              profile={profile}
+              onUpdate={update}
+              onReset={() => {
+                update(() => createProfile(`p_${Date.now().toString(36)}`));
+                setView({ name: 'tabs' });
+                setTab(0);
+                toast('Everything erased. Starting fresh.', '·');
+              }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
   const showBanner =
-    !bannerGone && tab === 0 && (platform.route === 'ios-safari' || platform.route === 'ios-other' || platform.route === 'prompt');
+    !bannerGone &&
+    tab === 0 &&
+    (platform.route === 'ios-safari' || platform.route === 'ios-other' || platform.route === 'prompt');
 
   return (
     <div className="mapp">
       <header className={`mhead${collapsed ? ' is-collapsed' : ''}`}>
         <span className="mhead__mark">{track?.mark ?? '{}'}</span>
         <span className="mhead__title">{tab === 0 ? (track?.name ?? 'Codeling') : TABS[tab].label}</span>
-        <span className="spacer" />
-        {offline ? <span className="mhead__offline">offline · still works</span> : null}
-        <span className="mhead__streak">
-          <span className="mhead__streaknum">{profile.streak}</span>
-          <span className="mhead__streaklabel">day</span>
+        <span className="mhead__level" title={`Level ${ladder.level} of ten`}>
+          L{ladder.level}
         </span>
+        <span className="spacer" />
+        {offline ? <span className="mhead__offline">offline</span> : null}
+        <span className="mhead__stat mhead__stat--gems">
+          <GemIcon />
+          {profile.gems}
+        </span>
+        <span className="mhead__stat mhead__stat--streak">
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path d="M12 2c3 4 6 5.5 6 9.5a6 6 0 0 1-12 0c0-2 1-3.5 2-4.5.5 1 1 1.5 2 1.5 0-3 1-5 2-6.5z" fill="currentColor" />
+          </svg>
+          {profile.streak}
+        </span>
+        <button
+          type="button"
+          className="iconbtn"
+          aria-label="Library"
+          onClick={() => {
+            haptic('tap');
+            setView({ name: 'library' });
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+            <path d="M4 5h5v14H4zM11 5h4v14h-4zM17 6l3 13" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+          </svg>
+        </button>
       </header>
 
       {showBanner ? (
@@ -261,33 +359,9 @@ function Shell() {
         }}
       >
         {[
-          <MobileHome
-            key="home"
-            profile={profile}
-            onStart={() => startLesson('course')}
-            onReview={() => startLesson('review')}
-          />,
-          <Stats key="stats" profile={profile} />,
-          <Library
-            key="library"
-            profile={profile}
-            onSwitch={(course) => {
-              update((p) => setCourse(p, course));
-              setTab(0);
-              toast('Course switched. Your progress carried over.', '✓');
-            }}
-            onRerunWizard={() => setView({ name: 'wizard' })}
-          />,
-          <MobileSettings
-            key="settings"
-            profile={profile}
-            onUpdate={update}
-            onReset={() => {
-              update(() => createProfile(`p_${Date.now().toString(36)}`));
-              setTab(0);
-              toast('Everything erased. Starting fresh.', '·');
-            }}
-          />,
+          <CoursePath key="course" profile={profile} onStart={() => startLesson('course')} onSkip={useSkip} />,
+          <Shop key="shop" profile={profile} onUpdate={update} onToast={toast} />,
+          <ProfileScreen key="profile" profile={profile} onSettings={() => setView({ name: 'settings' })} />,
         ]}
       </Pager>
 
@@ -295,5 +369,34 @@ function Shell() {
 
       <InstallSheet open={installOpen} onClose={() => setInstallOpen(false)} platform={platform} />
     </div>
+  );
+}
+
+function TopBar({
+  title,
+  onBack,
+  gems,
+  streak,
+}: {
+  title: string;
+  onBack: () => void;
+  gems: number;
+  streak: number;
+}) {
+  return (
+    <header className="mhead">
+      <button type="button" className="iconbtn" aria-label="Back" onClick={onBack}>
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      <span className="mhead__title">{title}</span>
+      <span className="spacer" />
+      <span className="mhead__stat mhead__stat--gems">
+        <GemIcon />
+        {gems}
+      </span>
+      <span className="mhead__stat mhead__stat--streak">{streak}</span>
+    </header>
   );
 }

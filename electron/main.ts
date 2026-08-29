@@ -20,7 +20,27 @@ interface WindowState {
   maximized: boolean;
 }
 
-const DEFAULT_WINDOW: WindowState = { width: 1180, height: 820, maximized: false };
+/**
+ * The desktop window is a phone.
+ *
+ * There is one UI now, and it is the phone one: a single layout to design, one
+ * set of gestures to keep working, and every screenshot the same shape. So the
+ * window is sized and locked to a phone's proportions rather than being a wide
+ * desktop frame with a column of phone in the middle of it.
+ */
+const PHONE_RATIO = 430 / 932;
+
+/**
+ * A window saved by an older build — back when this was a wide desktop layout —
+ * would restore as a 1180x820 frame holding a phone. Anything that is not
+ * roughly phone-shaped is thrown away rather than stretched.
+ */
+function phoneShaped(state: WindowState): WindowState {
+  const ratio = state.width / Math.max(1, state.height);
+  const sane = state.width <= 620 && Math.abs(ratio - PHONE_RATIO) < 0.12;
+  return sane ? { ...state, maximized: false } : { ...DEFAULT_WINDOW, x: state.x, y: state.y };
+}
+const DEFAULT_WINDOW: WindowState = { width: 460, height: 940, maximized: false };
 
 let win: BrowserWindow | null = null;
 let windowStore: JsonStore<WindowState>;
@@ -52,7 +72,7 @@ function clampToScreen(state: WindowState): WindowState {
 }
 
 function createWindow(): void {
-  const saved = clampToScreen(windowStore.get());
+  const saved = phoneShaped(clampToScreen(windowStore.get()));
 
   win = new BrowserWindow({
     title: 'Codeling',
@@ -60,8 +80,9 @@ function createWindow(): void {
     height: saved.height,
     x: saved.x,
     y: saved.y,
-    minWidth: 940,
-    minHeight: 660,
+    minWidth: 380,
+    minHeight: 700,
+    maxWidth: 620,
     show: false,
     backgroundColor: '#050506',
     // Frameless: the title bar is drawn by the app so the chrome is the same
@@ -81,7 +102,11 @@ function createWindow(): void {
     },
   });
 
-  if (saved.maximized) win.maximize();
+  // Locked to the phone's aspect: dragging a corner resizes it, but it stays
+  // the same shape. The title bar is outside the content area, so the ratio is
+  // applied to the content and Electron adds the bar back on.
+  win.setAspectRatio(PHONE_RATIO);
+  win.setMaximizable(false);
 
   win.once('ready-to-show', () => {
     win?.show();

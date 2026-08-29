@@ -15,6 +15,12 @@ import '@/styles/mobile.css';
 // the browser chrome sliding in and out as you scroll. Everything sized in
 // `100dvh` still ends up an inch too tall on some iOS versions, so the real
 // height is published as a variable and kept current.
+// The desktop build runs the same UI inside a phone-shaped window, and says so
+// on the root element, so a handful of rules can adapt without a second build.
+if (typeof window !== 'undefined' && (window as { codeling?: unknown }).codeling) {
+  document.documentElement.dataset.shell = 'desktop';
+}
+
 const setViewportUnit = () => {
   document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
 };
