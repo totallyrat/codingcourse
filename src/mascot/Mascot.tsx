@@ -536,8 +536,9 @@ export function Mascot({
           <rect ref={caretRef} x="-3" y="-9" width="6" height="16" rx="1.5" fill={kind.edge} />
         ) : kind.crown === 'leaf' ? (
           <g ref={caretRef as unknown as React.RefObject<SVGRectElement>}>
-            <path d="M0 -2 C 10 -12, 20 -8, 18 4 C 8 10, -1 6, 0 -2 z" fill={kind.edge} />
-            <path d="M1 0 L 15 2" stroke={kind.ink} strokeWidth="1.2" opacity="0.35" />
+            {/* a leaf, not a flag: two curves meeting at a point, with a vein */}
+            <path d="M0 2 C 4 -12, 16 -16, 22 -12 C 20 -2, 10 6, 0 2 z" fill={kind.edge} />
+            <path d="M1 1 C 8 -2, 14 -6, 20 -11" stroke={kind.ink} strokeWidth="1.3" fill="none" opacity="0.4" />
           </g>
         ) : (
           <rect ref={caretRef} x="0" y="0" width="0" height="0" fill="none" />
