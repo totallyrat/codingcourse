@@ -137,7 +137,12 @@ const TONE_LINE: Record<NonNullable<WireNode['tone']>, string> = {
 };
 
 function labelFor(type: PinType): string {
-  return type === 'exec' ? 'An execution pin' : `A ${type} pin`;
+  return type === 'exec' ? 'an execution pin' : `a ${type} pin`;
+}
+
+/** Sentence case, since these read as a sentence and not as a label. */
+function sentence(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function wirePath(from: Pin, to: Pin): string {
@@ -264,7 +269,7 @@ export function WireElement({ exercise, setResponse, grade }: ElementProps<WireE
     // And never across types: the editor refuses this too, rather than making
     // a wire that cannot compile.
     if (!compatible(from, to)) {
-      setRefused(`${labelFor(from.type)} does not connect to ${labelFor(to.type)}`);
+      setRefused(`${sentence(labelFor(from.type))} does not connect to ${labelFor(to.type)}.`);
       window.setTimeout(() => setRefused(null), 1800);
       return;
     }

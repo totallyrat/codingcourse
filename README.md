@@ -9,7 +9,7 @@ set of scoring functions over a library that ships inside the app. It works with
 network unplugged.
 
 ```
-13 tracks · 111 skills · 318 concepts · 730 exercises · 10 element types · 10 levels
+13 tracks · 113 skills · 325 concepts · 748 exercises · 10 element types · 10 levels
 ```
 
 One app, one shape. It is a phone app you install from the browser — no store,
@@ -111,7 +111,17 @@ Moving up is evidence, not luck:
 - two struggling lessons in a row eases the ladder back down a rung;
 - a lesson that was all easy revision **cannot** promote you at all, however
   well it went. That is the difference between "ready for the next rung" and
-  "had an easy day".
+  "had an easy day";
+- unless the library genuinely had nothing at your level left to give, which
+  the composer reports. A skill whose material all sits above you would
+  otherwise wall the course off for good: never served, so never mastered, so
+  the syllabus never moves on — and no at-level items, so the ladder can never
+  lift you over it either. A flawless lesson clears that, which is a higher bar
+  than the 85% the normal path asks for.
+
+A learner who answers everything correctly finishes every skill of every track,
+and [the test that proves it](src/engine/engine.test.ts) plays all thirteen
+through to the end on every run.
 
 ### The scheduling algorithm
 
@@ -164,6 +174,80 @@ than being a number that only moves in the shop:
 | **Lesson Skip** | credits a skill as passed — it still comes back for review |
 | **Mystery Chest** | one of the other four, resolved in the engine on purchase |
 
+Finished quests pay chests too, and they stack up in the shop until you open
+them.
+
+### Quests, and the league
+
+Ten quests a week, generated from your profile id and the Monday date, so
+everyone's week is different and yours is the same on every device. They ask
+for things the app already counts — 40 XP, three lessons, 80% in a lesson, a
+skill past 75%, a level climbed — and finishing one pays a chest. They update
+while you watch, on the profile screen, straight after a lesson.
+
+The league ranks you against fifteen simulated learners on **XP earned since
+Monday**. Everyone shows zero at the start of the week; your real total is
+never touched. The bots are generated on the device from your id and the week,
+each with its own pace, so the table is different every week and stable within
+it. Nothing is uploaded — there is no server to upload it to, and the screen
+says so.
+
+### After a lesson
+
+The celebration screen is one mascot, one line, and three numbers. Pressing
+Continue drops you on your profile with the numbers **still where they were
+before the lesson**, and then releases them: today's XP, your level, the course,
+the ladder, then your strongest skills, then what needs work, then the quests —
+the page scrolling itself down to each group as it moves. You watch the lesson
+you just did land, rather than finding it already landed.
+
+### When you are stuck
+
+"I am stuck" does not skip the question. It gives you a hint, then how to
+approach that kind of exercise, then a genuine narrowing of the search — two
+wrong options eliminated, the number of tiles and the first one, the length of
+the blank and its first character, which half of the code holds the bug. The
+question stays open and answerable the whole time. Only "show the answer",
+offered last, gives up — and it counts the item wrong and puts it back in the
+next lesson, which the screen says plainly.
+
+### Blueprints, the way the editor does them
+
+The Unreal course teaches Blueprints as Blueprints, not as a diagram of them.
+Pins carry types and Unreal's own colours — white exec arrows, green floats,
+cyan ints, pink strings, blue objects, red booleans — and a wire that could not
+compile is refused with the reason ("a float pin does not connect to an
+execution pin"), the way the editor refuses it. The two conversions Unreal
+inserts silently, float into string and int into float, are allowed here too.
+
+The canvas pans and zooms like the editor's viewport: one finger drags, two
+pinch, `+` / `−` / **Fit** sit over the graph, and a wide graph opens at a
+readable scale instead of being fitted into an unreadable strip. Two skills —
+reading a Blueprint and building one — cover pin types, get and set, pure
+functions, casting, macros and loops, delays, and timelines.
+
+### Your own mascot
+
+The avatar creator builds one from the same parts the cast is drawn from: head
+shape, colour, eyes, mouth, what sits on the head, arms, an outfit and its
+colour, and a name. It runs the same rig, so your mascot springs, blinks and
+trails its antenna exactly as the others do. It is who you are in the league,
+on your profile, and at the end of a lesson.
+
+### Reminders and haptics
+
+Both do what the platform actually allows, and the settings screen says which:
+
+- **Haptics.** Vibration where the browser has it. On iPhone there is no
+  vibration API, so the app borrows the tick a `<input type="checkbox" switch>`
+  makes and clicks a hidden one inside your tap — which is why it only fires on
+  a real gesture.
+- **A daily reminder** at a time you pick, skipped on any day you have already
+  practised. On Chromium, installed, it registers a periodic background sync so
+  the reminder can fire while the app is closed. Everywhere else it can only
+  fire while the app is open, and the screen tells you that rather than
+  promising a notification that will not come.
+
 ### The cast
 
 Five characters share one animation rig: a critically damped spring for the
@@ -172,7 +256,7 @@ vertical velocity, eyes that track and blink on their own schedule. Only the
 drawing changes — silhouette, palette, accessories. **Bit** runs the place,
 **Pip** cheers, **Byte** keeps the streak, **Nib** marks the mistakes and
 **Loop** brings back what you missed. One of them turns up to celebrate at the
-end of every lesson.
+end of every lesson — or your own mascot does, if you have made one.
 
 ### The ten element types
 
@@ -218,14 +302,15 @@ Every one has a keyboard path. Nothing is mouse-only.
 
 ```
 electron/        main process: window, menu, atomic JSON persistence, code runner
-src/engine/      types, course builder, SM-2 scheduler, lesson composer, grader
+src/engine/      types, course builder, SM-2 scheduler, lesson composer, grader,
+                 the ladder, quests, the league, stuck-tips, pin rules
 src/runtime/     MiniPy interpreter, TypeScript stripper, browser JS sandbox
 src/content/     13 tracks — the whole library, as plain data
 src/components/  the ten exercise elements
-src/mascot/      Bit
 src/screens/     wizard, lesson, library, settings
 src/mascot/      the cast, and the one rig they all run on
-src/mobile/      the shell: course path, shop, profile, celebration, tab pager
+src/mobile/      the shell: course path, league, shop, profile, quests,
+                 avatar creator, celebration, reminders, tab pager
 ```
 
 There is one UI. The phone build and the desktop build load the same shell —
@@ -233,7 +318,7 @@ the desktop window is simply locked to a phone's aspect and keeps its own
 title bar. That means one layout to design, one set of gestures to keep
 working, and no second-class version.
 
-The shell is built for a thumb: three tabs you can swipe between with the
+The shell is built for a thumb: four tabs you can swipe between with the
 indicator tracking your finger, the course as a **path** you scroll — big
 round lesson nodes weaving down the screen, a card that opens over the one you
 press, section banners and a trophy at the end of each — sheets you throw away
@@ -244,8 +329,9 @@ them follow the tilt of the phone instead.
 **Bit**, the mascot, runs on one `requestAnimationFrame` loop writing SVG
 attributes directly — no React renders. A critically-damped spring drives the
 body so every reaction overshoots and settles; the antenna is a four-point Verlet
-chain that only ever responds to where the head has been, which is what makes it
-read as physical; squash and stretch comes from vertical velocity. It watches
+chain, solved in the svg's own coordinates and pinned to that species' head, so
+it only ever responds to where the head has been — which is what makes it read
+as physical; squash and stretch comes from vertical velocity. It watches
 your cursor, blinks on its own schedule, and its antenna ends in a text caret
 that blinks at terminal cadence. It honours `prefers-reduced-motion`.
 

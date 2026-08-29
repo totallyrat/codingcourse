@@ -1256,7 +1256,9 @@ summary {
 /* The creature is drawn in the lower half of its box, so an avatar crop has
    to pull it up and in or you get a chin. */
 .profile__avatar svg {
-  transform: translateY(16%) scale(1.5);
+  /* Frame the head, not the middle of the drawing: the mascot's head centre
+     sits about 27% of the height below the svg's own centre. */
+  transform: translateY(-27%) scale(1.55);
 }
 .profile__id {
   flex: 1;
@@ -1694,7 +1696,9 @@ summary {
   overflow: hidden;
 }
 .leaguerow__face svg {
-  transform: translateY(16%) scale(1.5);
+  /* Frame the head, not the middle of the drawing: the mascot's head centre
+     sits about 27% of the height below the svg's own centre. */
+  transform: translateY(-27%) scale(1.55);
 }
 .leaguerow__name {
   flex: 1;

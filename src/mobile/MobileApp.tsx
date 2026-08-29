@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ToastHost, useToast } from '@/ui/primitives';
 import { TitleBar } from '@/ui/TitleBar';
 import { isElectron } from '@/lib/bridge';
@@ -69,6 +69,8 @@ function Shell() {
   const [view, setView] = useState<View>({ name: 'tabs' });
   const [collapsed, setCollapsed] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
+  const installTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(installTimer.current), []);
   const [bannerGone, setBannerGone] = useState(() => installBannerDismissed());
   const [offline, setOffline] = useState(typeof navigator !== 'undefined' && !navigator.onLine);
   // The profile as it was before the last lesson, so Profile can replay the
@@ -196,10 +198,17 @@ function Shell() {
       setReplayFrom(before);
       setView({ name: 'tabs' });
       setTab(3);
-      if (!installBannerDismissed() && platform.route !== 'installed' && platform.route !== 'desktop') {
-        setInstallOpen(true);
-        dismissInstallBanner();
-        setBannerGone(true);
+      const canInstall =
+        !installBannerDismissed() && platform.route !== 'installed' && platform.route !== 'desktop';
+      // Never over the replay, and never after somebody's first lesson: the
+      // bars they just earned are the thing to watch, and an install sheet
+      // sliding over them is the app talking about itself instead.
+      if (canInstall && before.lessonIndex >= 2) {
+        installTimer.current = window.setTimeout(() => {
+          setInstallOpen(true);
+          dismissInstallBanner();
+          setBannerGone(true);
+        }, 4200);
       }
     },
     [platform.route],

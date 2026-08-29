@@ -92,10 +92,26 @@ export function ProfileScreen({
       : 0;
   const done = doneSkills(profile);
 
-  // Scroll back to the top when the replay starts, or the animation happens
-  // wherever the panel happened to be left.
+  const skillsRef = useRef<HTMLDivElement>(null);
+  const weakRef = useRef<HTMLDivElement>(null);
+  const questsRef = useRef<HTMLDivElement>(null);
+
+  // The replay starts at the top and then walks down the page, arriving at
+  // each group of bars just before it moves. Watching your skills change is
+  // the point of coming here after a lesson; leaving it below the fold would
+  // mean nobody ever saw it.
   useEffect(() => {
-    if (replayFrom) replayRef.current?.scrollIntoView({ block: 'start' });
+    if (!replayFrom) return;
+    replayRef.current?.scrollIntoView({ block: 'start' });
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    if (reduced) return;
+    const behavior: ScrollBehavior = 'smooth';
+    const timers = [
+      window.setTimeout(() => skillsRef.current?.scrollIntoView({ behavior, block: 'center' }), 1300),
+      window.setTimeout(() => weakRef.current?.scrollIntoView({ behavior, block: 'center' }), 2200),
+      window.setTimeout(() => questsRef.current?.scrollIntoView({ behavior, block: 'start' }), 3100),
+    ];
+    return () => timers.forEach(clearTimeout);
   }, [replayFrom]);
 
   const questsFrom = useMemo(() => {
@@ -191,7 +207,7 @@ export function ProfileScreen({
       </section>
 
       {skillBars.length ? (
-        <section className="profile__block">
+        <section className="profile__block" ref={skillsRef}>
           <h4>Strongest skills</h4>
           {skillBars.map((row, i) => (
             <Bar
@@ -208,7 +224,7 @@ export function ProfileScreen({
       ) : null}
 
       {weak.length ? (
-        <section className="profile__block">
+        <section className="profile__block" ref={weakRef}>
           <h4>Needs work</h4>
           {weak.map((row, i) => (
             <Bar
@@ -225,7 +241,9 @@ export function ProfileScreen({
         </section>
       ) : null}
 
-      <Quests state={profile.quests} animateFrom={questsFrom} chests={profile.inventory.chest} />
+      <div ref={questsRef}>
+        <Quests state={profile.quests} animateFrom={questsFrom} chests={profile.inventory.chest} />
+      </div>
     </div>
   );
 }
