@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { avatarSpecies, type AvatarConfig } from './avatar';
 
 export type BitMood = 'idle' | 'happy' | 'wrong' | 'thinking' | 'celebrate' | 'sleep' | 'wave';
 export type SpeciesId = 'bit' | 'pip' | 'byte' | 'nib' | 'loop';
@@ -80,8 +81,12 @@ export interface Species {
   /** The silhouette. Eyes and mouth sit at the same place on all of them. */
   head: Head;
   /** What sits on the head, drawn behind the body. */
-  crown: 'caret' | 'leaf' | 'none';
+  crown: 'caret' | 'leaf' | 'bulb' | 'none';
   arms: 'bracket' | 'mitt' | 'none';
+  /** Multiplier on eye size, for a wide-eyed or a sleepy character. */
+  eyeScale?: number;
+  /** The resting mouth shape. The mood still bends it. */
+  mouthStyle?: 'smile' | 'flat' | 'oh';
   /** Extra shapes drawn behind the head. */
   behind?: ReactNode;
   /** Extra shapes drawn on the head, in front of the fill and under the face. */
@@ -191,6 +196,7 @@ export function Mascot({
   trackPointer = true,
   gazeSource,
   species = 'bit',
+  custom,
 }: {
   mood?: BitMood;
   size?: number;
@@ -204,8 +210,11 @@ export function Mascot({
    */
   gazeSource?: () => { x: number; y: number } | null;
   species?: SpeciesId;
+  /** A made-up character, from the avatar creator. Wins over `species`. */
+  custom?: AvatarConfig | null;
 }) {
-  const kind = CAST[species] ?? CAST.bit;
+  const kind = custom ? avatarSpecies(custom) : (CAST[species] ?? CAST.bit);
+  const eyeScale = kind.eyeScale ?? 1;
   const svgRef = useRef<SVGSVGElement>(null);
   const rootRef = useRef<SVGGElement>(null);
   const bodyRef = useRef<SVGGElement>(null);
@@ -225,6 +234,8 @@ export function Mascot({
   const zzzRef = useRef<SVGGElement>(null);
 
   const moodRef = useRef<BitMood>(mood);
+  const kindRef = useRef(kind);
+  kindRef.current = kind;
   const pokeRef = useRef(0);
   const gazeSourceRef = useRef(gazeSource);
   gazeSourceRef.current = gazeSource;
@@ -344,7 +355,14 @@ export function Mascot({
       shadowRef.current?.setAttribute('opacity', String(Math.max(0.05, 0.3 - lift * 0.008)));
 
       // ---- antenna: Verlet chain hanging off the head ---------------------
-      const anchor: Vec = { x: body.x + shake, y: body.y - 44 };
+      // Pinned to the top of *this* species' head. The cast have different
+      // heads, and one shared anchor left the antenna floating in mid-air
+      // above the shorter ones.
+      const head = kindRef.current.head;
+      const anchor: Vec = {
+        x: body.x + shake - 100 + head.x + head.w / 2,
+        y: body.y - 118 + head.y + 2,
+      };
       chain[0].pos = { ...anchor };
       chain[0].prev = { ...anchor };
       for (let i = 1; i < chain.length; i++) {
@@ -459,12 +477,23 @@ export function Mascot({
       // ---- mouth ----------------------------------------------------------
       mouthAmt = lerp(mouthAmt, pose.mouth, Math.min(1, dt * 11));
       const m = mouthAmt;
-      const width = 13 + Math.abs(m) * 5;
-      const curve = m * 11;
-      mouthRef.current?.setAttribute(
-        'd',
-        `M ${100 - width} 166 Q 100 ${166 + curve} ${100 + width} 166`,
-      );
+      const style = kindRef.current.mouthStyle ?? 'smile';
+      if (style === 'oh') {
+        // A small circle that widens with the mood, drawn as two arcs.
+        const r = 5 + Math.abs(m) * 3.5;
+        mouthRef.current?.setAttribute(
+          'd',
+          `M ${100 - r} 166 a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0`,
+        );
+      } else {
+        const flat = style === 'flat' ? 0.25 : 1;
+        const width = 13 + Math.abs(m) * 5;
+        const curve = m * 11 * flat;
+        mouthRef.current?.setAttribute(
+          'd',
+          `M ${100 - width} 166 Q 100 ${166 + curve} ${100 + width} 166`,
+        );
+      }
 
       // ---- bracket arms ---------------------------------------------------
       const flap =
@@ -517,33 +546,42 @@ export function Mascot({
     >
       <ellipse ref={shadowRef} cx="100" cy="198" rx="30" ry="6" fill={kind.edge} opacity="0.16" />
 
-      <g ref={rootRef}>
-        {/* whatever is on the head sits behind the body so its base tucks under */}
-        {kind.crown !== 'none' ? (
-          <path
-            ref={antennaRef}
-            d="M 100 74 L 100 40"
-            stroke={kind.edge}
-            strokeWidth="3"
-            strokeLinecap="round"
-            fill="none"
-            opacity="0.9"
-          />
-        ) : (
-          <path ref={antennaRef} d="M 100 74 L 100 74" stroke="none" fill="none" />
-        )}
-        {kind.crown === 'caret' ? (
-          <rect ref={caretRef} x="-3" y="-9" width="6" height="16" rx="1.5" fill={kind.edge} />
-        ) : kind.crown === 'leaf' ? (
-          <g ref={caretRef as unknown as React.RefObject<SVGRectElement>}>
-            {/* a leaf, not a flag: two curves meeting at a point, with a vein */}
-            <path d="M0 2 C 4 -12, 16 -16, 22 -12 C 20 -2, 10 6, 0 2 z" fill={kind.edge} />
-            <path d="M1 1 C 8 -2, 14 -6, 20 -11" stroke={kind.ink} strokeWidth="1.3" fill="none" opacity="0.4" />
-          </g>
-        ) : (
-          <rect ref={caretRef} x="0" y="0" width="0" height="0" fill="none" />
-        )}
+      {/* The antenna and whatever it carries are solved in the svg's own
+          coordinates, so they trail behind the body instead of being carried
+          rigidly with it. That means they cannot live inside the moving
+          group — they sit just before it, which also keeps them behind the
+          body so the base tucks under the head. */}
+      {kind.crown !== 'none' ? (
+        <path
+          ref={antennaRef}
+          d={`M ${kind.head.x + kind.head.w / 2} ${kind.head.y + 2} L ${kind.head.x + kind.head.w / 2} ${kind.head.y - 36}`}
+          stroke={kind.edge}
+          strokeWidth="3"
+          strokeLinecap="round"
+          fill="none"
+          opacity="0.9"
+        />
+      ) : (
+        <path ref={antennaRef} d="M 100 112 L 100 112" stroke="none" fill="none" />
+      )}
+      {kind.crown === 'bulb' ? (
+        <g ref={caretRef as unknown as React.RefObject<SVGRectElement>}>
+          <circle cx="0" cy="-2" r="9" fill={kind.edge} />
+          <circle cx="-3" cy="-5" r="3" fill="#ffffff" opacity="0.5" />
+        </g>
+      ) : kind.crown === 'caret' ? (
+        <rect ref={caretRef} x="-3" y="-9" width="6" height="16" rx="1.5" fill={kind.edge} />
+      ) : kind.crown === 'leaf' ? (
+        <g ref={caretRef as unknown as React.RefObject<SVGRectElement>}>
+          {/* a leaf, not a flag: two curves meeting at a point, with a vein */}
+          <path d="M0 2 C 4 -12, 16 -16, 22 -12 C 20 -2, 10 6, 0 2 z" fill={kind.edge} />
+          <path d="M1 1 C 8 -2, 14 -6, 20 -11" stroke={kind.ink} strokeWidth="1.3" fill="none" opacity="0.4" />
+        </g>
+      ) : (
+        <rect ref={caretRef} x="0" y="0" width="0" height="0" fill="none" />
+      )}
 
+      <g ref={rootRef}>
         <g ref={sparkRef} opacity="0">
           <path d="M42 96 l3 -8 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 z" fill={kind.edge} opacity="0.85" />
           <path d="M158 112 l2.2 -6 l2.2 6 l6 2.2 l-6 2.2 l-2.2 6 l-2.2 -6 l-6 -2.2 z" fill={kind.edge} opacity="0.7" />
@@ -608,7 +646,7 @@ export function Mascot({
 
           <g ref={eyeLRef}>
             <g ref={pupilLRef}>
-              <ellipse cx="84" cy="146" rx="7" ry="8.6" fill={kind.ink} />
+              <ellipse cx="84" cy="146" rx={7 * eyeScale} ry={8.6 * eyeScale} fill={kind.ink} />
               <circle cx="86.4" cy="142.6" r="2.1" fill="#ffffff" opacity="0.9" />
               <circle cx="81.6" cy="149.4" r="1.1" fill="#ffffff" opacity="0.45" />
             </g>
@@ -617,7 +655,7 @@ export function Mascot({
           </g>
           <g ref={eyeRRef}>
             <g ref={pupilRRef}>
-              <ellipse cx="116" cy="146" rx="7" ry="8.6" fill={kind.ink} />
+              <ellipse cx="116" cy="146" rx={7 * eyeScale} ry={8.6 * eyeScale} fill={kind.ink} />
               <circle cx="118.4" cy="142.6" r="2.1" fill="#ffffff" opacity="0.9" />
               <circle cx="113.6" cy="149.4" r="1.1" fill="#ffffff" opacity="0.45" />
             </g>

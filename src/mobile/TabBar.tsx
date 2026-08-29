@@ -1,6 +1,6 @@
 import { haptic } from '@/lib/haptics';
 
-export type TabId = 'course' | 'shop' | 'profile';
+export type TabId = 'course' | 'league' | 'shop' | 'profile';
 
 export const TABS: Array<{ id: TabId; label: string; icon: JSX.Element }> = [
   {
@@ -9,6 +9,17 @@ export const TABS: Array<{ id: TabId; label: string; icon: JSX.Element }> = [
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M5 20V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14l-7-3z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'league',
+    label: 'League',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 4h10v4a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+        <path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" fill="none" stroke="currentColor" strokeWidth="1.9" />
+        <path d="M10 14h4v3h-4zM8 20h8" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
       </svg>
     ),
   },

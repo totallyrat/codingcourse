@@ -12,10 +12,14 @@ import {
   streakState,
 } from './progress';
 import { applyLesson, buildLevelIndex, freshLevel, runNeeded, type LevelState } from './levels';
+import { applyLessonToQuests, ensureWeek, generateQuests, weekKey, QUESTS_PER_WEEK } from './quests';
+import { league, timeToReset, weeklyXp, zoneFor, LEAGUE_SIZE } from './leaderboard';
 import { clearMistake, decayedStrength, dueMistakes, queueMistake, reviewConcept, INITIAL_MEMORY } from './scheduler';
 import { grade, splitTemplate } from './grader';
+import { tipsFor } from './tips';
+import { pinId, pinOf, pinsCompatible } from './wire';
 import { TRACKS, exercisesForTrack, allExercises, trackById } from '@/content';
-import type { Exercise, Profile, WizardAnswers } from './types';
+import type { Exercise, PinType, Profile, WizardAnswers } from './types';
 
 const answers = (over: Partial<WizardAnswers> = {}): WizardAnswers => ({
   trackId: 'python',
@@ -466,15 +470,22 @@ describe('content library', () => {
         // A link runs out -> in. Checking the two sides separately is what
         // catches a link pointing at a node's *output* when it meant the
         // input of the same name, which every exec pin has.
-        const outputs = new Set<string>();
-        const inputs = new Set<string>();
+        const outputs = new Map<string, PinType>();
+        const inputs = new Map<string, PinType>();
         for (const n of ex.nodes) {
-          for (const o of n.outputs ?? []) outputs.add(`${n.id}:${o}`);
-          for (const i of n.inputs ?? []) inputs.add(`${n.id}:${i}`);
+          for (const o of n.outputs ?? []) outputs.set(pinId(n.id, o), pinOf(o).type);
+          for (const i of n.inputs ?? []) inputs.set(pinId(n.id, i), pinOf(i).type);
         }
         for (const [from, to] of ex.links) {
           expect(outputs.has(from), `${ex.id}: ${from} is not an output pin`).toBe(true);
           expect(inputs.has(to), `${ex.id}: ${to} is not an input pin`).toBe(true);
+          // The answer has to obey the same pin rules the player enforces, or
+          // the graph would be unsolvable by the rules it is teaching.
+          const a = outputs.get(from);
+          const b = inputs.get(to);
+          if (a && b) {
+            expect(pinsCompatible(a, b), `${ex.id}: ${from} (${a}) cannot reach ${to} (${b})`).toBe(true);
+          }
         }
       }
     }
@@ -681,5 +692,382 @@ describe('the shop', () => {
     for (const concept of skill.concepts) {
       expect(after.concepts[concept].seen).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+
+/* ============================================================================
+   Weekly quests
+   ========================================================================== */
+
+const facts = (over: Partial<Parameters<typeof applyLessonToQuests>[1]> = {}) => ({
+  xp: 70,
+  gems: 12,
+  correct: 9,
+  total: 10,
+  perfect: false,
+  seconds: 300,
+  rechecksCleared: 2,
+  skillsMastered: 0,
+  levelsClimbed: 0,
+  streak: 3,
+  ...over,
+});
+
+describe('weekly quests', () => {
+  it('gives ten of them, and the same ten all week', () => {
+    const a = generateQuests('learner-1', '2026-08-24');
+    const b = generateQuests('learner-1', '2026-08-24');
+    expect(a).toHaveLength(QUESTS_PER_WEEK);
+    expect(a.map((q) => q.id)).toEqual(b.map((q) => q.id));
+  });
+
+  it('gives a different set next week, and to a different learner', () => {
+    const mine = generateQuests('learner-1', '2026-08-24').map((q) => q.id).join();
+    const nextWeek = generateQuests('learner-1', '2026-08-31').map((q) => q.id).join();
+    const yours = generateQuests('learner-2', '2026-08-24').map((q) => q.id).join();
+    expect(nextWeek).not.toBe(mine);
+    expect(yours).not.toBe(mine);
+  });
+
+  it('never repeats a quest inside one week', () => {
+    const ids = generateQuests('learner-1', '2026-08-24').map((q) => q.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('starts the week on the Monday', () => {
+    // 2026-08-29 is a Saturday; its week began on the 24th.
+    expect(weekKey(new Date(2026, 7, 29, 12))).toBe('2026-08-24');
+    expect(weekKey(new Date(2026, 7, 24, 0, 1))).toBe('2026-08-24');
+    // Sunday belongs to the week that started six days earlier, not the next one.
+    expect(weekKey(new Date(2026, 7, 30, 23))).toBe('2026-08-24');
+  });
+
+  it('rolls over when the week changes and leaves it alone when it does not', () => {
+    const first = ensureWeek(null, 'learner-1', new Date(2026, 7, 26));
+    const same = ensureWeek(first, 'learner-1', new Date(2026, 7, 28));
+    expect(same).toBe(first);
+    const next = ensureWeek(first, 'learner-1', new Date(2026, 8, 2));
+    expect(next.week).not.toBe(first.week);
+    expect(next.quests.every((q) => q.progress === 0)).toBe(true);
+  });
+
+  it('advances only the quests a lesson actually speaks to', () => {
+    const state = ensureWeek(null, 'learner-1', new Date(2026, 7, 26));
+    const after = applyLessonToQuests(state, facts({ perfect: false })).state;
+    const xpQuest = after.quests.find((q) => q.kind === 'xp');
+    const perfectQuest = after.quests.find((q) => q.kind === 'perfect');
+    if (xpQuest) expect(xpQuest.progress).toBe(70);
+    if (perfectQuest) expect(perfectQuest.progress).toBe(0);
+  });
+
+  it('counts an 80% lesson for the 80% quest and not for the 90% one', () => {
+    const state: ReturnType<typeof ensureWeek> = {
+      week: '2026-08-24',
+      quests: [
+        { id: 'a', kind: 'accuracy', title: '80', target: 1, threshold: 0.8, progress: 0, done: false, paid: false },
+        { id: 'b', kind: 'accuracy', title: '90', target: 1, threshold: 0.9, progress: 0, done: false, paid: false },
+      ],
+    };
+    const after = applyLessonToQuests(state, facts({ correct: 8, total: 10 })).state;
+    expect(after.quests[0].done).toBe(true);
+    expect(after.quests[1].done).toBe(false);
+  });
+
+  it('reports a quest as completed exactly once', () => {
+    const state: ReturnType<typeof ensureWeek> = {
+      week: '2026-08-24',
+      quests: [{ id: 'x', kind: 'lessons', title: '2 lessons', target: 2, progress: 0, done: false, paid: false }],
+    };
+    const one = applyLessonToQuests(state, facts());
+    expect(one.completed).toHaveLength(0);
+    const two = applyLessonToQuests(one.state, facts());
+    expect(two.completed).toHaveLength(1);
+    const three = applyLessonToQuests(two.state, facts());
+    expect(three.completed).toHaveLength(0);
+    expect(three.state.quests[0].progress).toBe(2);
+  });
+
+  it('hands over a chest for every quest a lesson finishes', () => {
+    let profile = { ...createProfile('p'), quests: { week: weekKey(), quests: [
+      { id: 'x', kind: 'lessons' as const, title: '1 lesson', target: 1, progress: 0, done: false, paid: false },
+    ] } };
+    const reward = completeLesson(profile, {
+      correct: 5,
+      total: 5,
+      seconds: 120,
+      perfect: true,
+      skillId: 's',
+      trackId: 'python',
+      atLevel: 3,
+    });
+    expect(reward.questsCompleted.map((q) => q.id)).toEqual(['x']);
+    expect(reward.profile.inventory.chest).toBe(1);
+    // And never again for the same quest.
+    const second = completeLesson(reward.profile, {
+      correct: 5,
+      total: 5,
+      seconds: 120,
+      perfect: true,
+      skillId: 's',
+      trackId: 'python',
+      atLevel: 3,
+    });
+    expect(second.questsCompleted).toHaveLength(0);
+    expect(second.profile.inventory.chest).toBe(1);
+  });
+});
+
+/* ============================================================================
+   The weekly league
+   ========================================================================== */
+
+describe('the leaderboard', () => {
+  const withDays = (days: Array<[string, number]>): Profile => ({
+    ...createProfile('learner-1'),
+    days: days.map(([date, xp]) => ({ date, xp, lessons: 1, correct: 8, answered: 10, seconds: 200 })),
+  });
+
+  it('counts only the XP earned since Monday', () => {
+    const profile = withDays([
+      ['2026-08-23', 500], // the Sunday before
+      ['2026-08-24', 120], // Monday
+      ['2026-08-26', 80],
+    ]);
+    expect(weeklyXp(profile, new Date(2026, 7, 28, 12))).toBe(200);
+  });
+
+  it('shows zero on a Monday without touching the real total', () => {
+    const profile = withDays([['2026-08-23', 500]]);
+    const monday = new Date(2026, 7, 24, 9);
+    expect(weeklyXp(profile, monday)).toBe(0);
+    expect(profile.days.reduce((n, d) => n + d.xp, 0)).toBe(500);
+    const table = league(profile, monday);
+    expect(table.find((row) => row.you)!.xp).toBe(0);
+  });
+
+  it('builds a full table with you in it exactly once', () => {
+    const table = league(withDays([['2026-08-25', 300]]), new Date(2026, 7, 27, 12));
+    expect(table).toHaveLength(LEAGUE_SIZE);
+    expect(table.filter((row) => row.you)).toHaveLength(1);
+  });
+
+  it('is sorted, and stable through the week', () => {
+    const profile = withDays([['2026-08-25', 300]]);
+    const at = new Date(2026, 7, 27, 12);
+    const first = league(profile, at);
+    const again = league(profile, at);
+    expect(first.map((r) => r.id)).toEqual(again.map((r) => r.id));
+    for (let i = 1; i < first.length; i++) {
+      expect(first[i - 1].xp).toBeGreaterThanOrEqual(first[i].xp);
+    }
+  });
+
+  it('grows the bots as the week goes on', () => {
+    const profile = withDays([]);
+    const monday = league(profile, new Date(2026, 7, 24, 9)).reduce((n, r) => n + r.xp, 0);
+    const friday = league(profile, new Date(2026, 7, 28, 21)).reduce((n, r) => n + r.xp, 0);
+    expect(friday).toBeGreaterThan(monday);
+  });
+
+  it('marks the promotion and relegation zones', () => {
+    expect(zoneFor(0)).toBe('promotion');
+    expect(zoneFor(8)).toBe('safe');
+    expect(zoneFor(LEAGUE_SIZE - 1)).toBe('relegation');
+  });
+
+  it('counts down to the reset', () => {
+    expect(timeToReset(new Date(2026, 7, 24, 9))).toMatch(/day/);
+    expect(timeToReset(new Date(2026, 7, 30, 22))).toMatch(/hour|minute/);
+  });
+});
+
+
+/* ============================================================================
+   Getting unstuck
+   ========================================================================== */
+
+describe('stuck tips', () => {
+  it('escalates from the hint, to a method, to a narrowing fact', () => {
+    const ex = allExercises().find((e) => !!e.hint)!;
+    const tips = tipsFor(ex);
+    expect(tips.length).toBeGreaterThanOrEqual(3);
+    expect(tips[0].label).toBe('Hint');
+    expect(tips[1].label).toBe('How to approach it');
+    expect(tips[2].label).toBe('Narrow it down');
+  });
+
+  it('still offers two tips when the author wrote no hint', () => {
+    const ex = allExercises().find((e) => e.kind === 'choice' && !e.hint)!;
+    expect(tipsFor(ex).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('eliminates wrong options without naming the right one', () => {
+    const ex = {
+      kind: 'choice' as const,
+      id: 't1',
+      track: 'python',
+      concepts: ['py.print'],
+      difficulty: 1 as const,
+      prompt: 'p',
+      options: ['a', 'b', 'c', 'd'],
+      answer: [2],
+      explain: 'x',
+    };
+    const narrow = tipsFor(ex).at(-1)!.body;
+    expect(narrow).toMatch(/It is not/);
+    // The eliminated options are wrong ones, and the answer is never given.
+    expect(narrow).not.toContain('3');
+  });
+
+  it('gives the shape of a written answer rather than the answer', () => {
+    const ex = {
+      kind: 'blank' as const,
+      id: 't2',
+      track: 'python',
+      concepts: ['py.print'],
+      difficulty: 1 as const,
+      prompt: 'p',
+      template: '{{0}}("hi")',
+      blanks: [{ accept: ['print'] }],
+      explain: 'x',
+    };
+    const narrow = tipsFor(ex).at(-1)!.body;
+    expect(narrow).toContain('5 characters');
+    expect(narrow).toContain('"p"');
+    expect(narrow).not.toContain('print');
+  });
+
+  it('has a strategy for every element type', () => {
+    const kinds = new Set(allExercises().map((e) => e.kind));
+    for (const kind of kinds) {
+      const ex = allExercises().find((e) => e.kind === kind)!;
+      const tips = tipsFor(ex);
+      const strategy = tips.find((t) => t.label === 'How to approach it');
+      expect(strategy, `${kind} has no strategy`).toBeTruthy();
+      expect(strategy!.body.length, `${kind}'s strategy is thin`).toBeGreaterThan(40);
+      expect(tips.every((t) => t.body.length > 10), `${kind} has an empty tip`).toBe(true);
+    }
+  });
+});
+
+
+/* ============================================================================
+   A course you can actually finish
+
+   The ladder and the level gate together can build a wall: a skill whose
+   material all sits above the learner's level is never served, so the skill is
+   never mastered, so the syllabus never moves on — and the ladder cannot lift
+   the learner over it either, because promotion needs at-level items and there
+   are none. Every one of these tests is here because that wall was real.
+   ========================================================================== */
+
+describe('a course you can actually finish', () => {
+  /** Plays a track with every answer correct and reports how far it got. */
+  function playThrough(trackId: string, maxLessons = 200) {
+    const track = trackById(trackId)!;
+    let profile = freshProfile(trackId);
+    const library = exercisesForTrack(trackId);
+    const mastered = () =>
+      profile.course!.syllabus.every((id) => {
+        const skill = track.skills.find((s) => s.id === id);
+        return !skill || skillMastery(profile, skill) >= 0.75;
+      });
+
+    let lessons = 0;
+    for (; lessons < maxLessons && !mastered(); lessons++) {
+      const level = levelFor(profile, trackId).level;
+      const lesson = composeLesson({
+        profile,
+        course: profile.course!,
+        track,
+        library,
+        slots: lessonSize(10, level),
+        level,
+      });
+      if (!lesson.slots.length) break;
+      for (const slot of lesson.slots) {
+        profile = recordAnswer(profile, slot.exercise, { correct: true, seconds: 8, usedHint: false });
+      }
+      profile = completeLesson(profile, {
+        correct: lesson.slots.length,
+        total: lesson.slots.length,
+        seconds: 240,
+        perfect: true,
+        skillId: lesson.skillId,
+        trackId,
+        atLevel: lesson.atLevel,
+        starved: lesson.starved,
+      }).profile;
+    }
+    const unfinished = profile.course!.syllabus.filter((id) => {
+      const skill = track.skills.find((s) => s.id === id);
+      return skill && skillMastery(profile, skill) < 0.75;
+    });
+    return { profile, lessons, unfinished, level: levelFor(profile, trackId).level };
+  }
+
+  it('carries a learner through every skill of every track', () => {
+    for (const track of TRACKS) {
+      const run = playThrough(track.id);
+      expect(run.unfinished, `${track.id} stalled with ${run.unfinished.join(', ')} unfinished`).toEqual([]);
+    }
+  });
+
+  it('lets the ladder climb as the course is finished', () => {
+    for (const track of TRACKS) {
+      const run = playThrough(track.id);
+      expect(run.level, `${track.id} never got past level ${run.level}`).toBeGreaterThanOrEqual(5);
+    }
+  });
+
+  it('teaches a concept whose material sits above the learner, rather than skipping it', () => {
+    // The composer may reach two rungs up for a concept the learner has not
+    // got yet. Without that, a skill can hold three concepts of which one is
+    // simply never taught.
+    const track = trackById('go')!;
+    const library = exercisesForTrack('go');
+    let profile = freshProfile('go');
+    const seen = new Set<string>();
+    for (let n = 0; n < 40; n++) {
+      const level = levelFor(profile, 'go').level;
+      const lesson = composeLesson({
+        profile, course: profile.course!, track, library, slots: lessonSize(10, level), level,
+      });
+      if (!lesson.slots.length) break;
+      for (const slot of lesson.slots) {
+        seen.add(slot.exercise.concepts[0]);
+        profile = recordAnswer(profile, slot.exercise, { correct: true, seconds: 8, usedHint: false });
+      }
+      profile = completeLesson(profile, {
+        correct: lesson.slots.length, total: lesson.slots.length, seconds: 240, perfect: true,
+        skillId: lesson.skillId, trackId: 'go', atLevel: lesson.atLevel, starved: lesson.starved,
+      }).profile;
+    }
+    // go.switch is taught by exactly one exercise, several levels above where
+    // a learner reaches that skill. It has to be served anyway.
+    expect(seen.has('go.switch')).toBe(true);
+  });
+
+  it('reports a starved lesson so the ladder is not locked by thin content', () => {
+    // A lesson that had nothing at the learner's level to give, and was aced,
+    // still counts towards promotion — but an easy day with material going
+    // spare does not.
+    const starved = applyLesson({ level: 6, run: 3, slips: 0, recent: [] }, {
+      score: 1, atLevel: 0, total: 12, starved: true,
+    });
+    expect(starved.moved).toBe('up');
+
+    const easyDay = applyLesson({ level: 6, run: 3, slips: 0, recent: [] }, {
+      score: 1, atLevel: 0, total: 12, starved: false,
+    });
+    expect(easyDay.moved).toBe(null);
+  });
+
+  it('does not let a starved lesson promote on a mediocre score', () => {
+    const shaky = applyLesson({ level: 6, run: 3, slips: 0, recent: [] }, {
+      score: 0.9, atLevel: 0, total: 12, starved: true,
+    });
+    expect(shaky.moved).toBe(null);
   });
 });

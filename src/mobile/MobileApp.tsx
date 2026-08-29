@@ -8,7 +8,9 @@ import { Lesson, type LessonResult } from '@/screens/Lesson';
 import { Library } from '@/screens/Library';
 import { CoursePath } from './CoursePath';
 import { Shop, GemIcon } from './Shop';
+import { Leaderboard } from './Leaderboard';
 import { ProfileScreen } from './ProfileScreen';
+import { AvatarCreator } from './AvatarCreator';
 import { Celebration } from './Celebration';
 import { MobileSettings } from './MobileSettings';
 import { Pager } from './Pager';
@@ -16,6 +18,7 @@ import { TabBar, TABS } from './TabBar';
 import { InstallSheet, dismissInstallBanner, installBannerDismissed } from './InstallSheet';
 import { currentPlatform } from './platform';
 import { restoreTilt } from './tilt';
+import { cancelReminder, scheduleReminder } from './notifications';
 import { haptic } from '@/lib/haptics';
 import { useProfile } from '@/lib/useProfile';
 import { exercisesForTrack, trackById } from '@/content';
@@ -27,17 +30,20 @@ import {
   levelFor,
   setCourse,
   spendLessonSkip,
+  xpToday,
   type LessonReward,
 } from '@/engine/progress';
-import type { Course, Lesson as LessonModel, Skill } from '@/engine/types';
+import type { AvatarConfig, Course, Lesson as LessonModel, Profile, Skill } from '@/engine/types';
+import { skillMastery } from '@/engine/lessonComposer';
 
 type View =
   | { name: 'tabs' }
   | { name: 'wizard' }
   | { name: 'library' }
   | { name: 'settings' }
-  | { name: 'lesson'; lesson: LessonModel }
-  | { name: 'done'; result: LessonResult; reward: LessonReward };
+  | { name: 'avatar' }
+  | { name: 'lesson'; lesson: LessonModel; before: Profile }
+  | { name: 'done'; result: LessonResult; reward: LessonReward; before: Profile };
 
 /**
  * The app, on a phone-shaped screen — which is now every screen, desktop
@@ -65,12 +71,23 @@ function Shell() {
   const [installOpen, setInstallOpen] = useState(false);
   const [bannerGone, setBannerGone] = useState(() => installBannerDismissed());
   const [offline, setOffline] = useState(typeof navigator !== 'undefined' && !navigator.onLine);
+  // The profile as it was before the last lesson, so Profile can replay the
+  // change rather than just showing the result.
+  const [replayFrom, setReplayFrom] = useState<Profile | null>(null);
   const toast = useToast();
   const platform = useMemo(() => currentPlatform(), []);
 
   useEffect(() => {
     restoreTilt();
   }, []);
+
+  // Arm the daily reminder whenever the setting or today's practice changes.
+  // The "have I practised" question is asked at fire time, not now.
+  useEffect(() => {
+    if (!profile) return;
+    scheduleReminder(profile.settings.reminders, () => (xpToday(profile) > 0));
+    return () => cancelReminder();
+  }, [profile?.settings.reminders, profile]);
 
   useEffect(() => {
     if (!profile) return;
@@ -116,14 +133,22 @@ function Shell() {
         return;
       }
       haptic('tap');
-      setView({ name: 'lesson', lesson });
+      setView({ name: 'lesson', lesson, before: profile });
     },
     [profile, toast],
   );
 
   const onFinishLesson = useCallback(
-    (result: LessonResult) => {
+    (result: LessonResult, before: Profile) => {
       update((p) => {
+        const track = p.course ? trackById(p.course.trackId) : undefined;
+        // A skill counts as mastered by this lesson if it crossed 75% during it.
+        const skillsMastered = track
+          ? track.skills.filter(
+              (skill) => skillMastery(before, skill) < 0.75 && skillMastery(p, skill) >= 0.75,
+            ).length
+          : 0;
+
         const reward = completeLesson(p, {
           correct: result.correct,
           total: result.total,
@@ -132,8 +157,11 @@ function Shell() {
           skillId: result.lesson.skillId,
           trackId: p.course?.trackId ?? '',
           atLevel: result.lesson.atLevel,
+          starved: result.lesson.starved,
+          rechecksCleared: result.rechecksCleared,
+          skillsMastered,
         });
-        setView({ name: 'done', result, reward });
+        setView({ name: 'done', result, reward, before });
         return reward.profile;
       });
     },
@@ -158,14 +186,34 @@ function Shell() {
     [update, toast],
   );
 
-  const leaveLesson = useCallback(() => {
-    setView({ name: 'tabs' });
-    if (!installBannerDismissed() && platform.route !== 'installed' && platform.route !== 'desktop') {
-      setInstallOpen(true);
-      dismissInstallBanner();
-      setBannerGone(true);
-    }
-  }, [platform.route]);
+  /**
+   * Continue from the celebration lands on Profile with the replay armed, so
+   * the numbers you just earned are watched moving rather than found already
+   * moved.
+   */
+  const leaveLesson = useCallback(
+    (before: Profile) => {
+      setReplayFrom(before);
+      setView({ name: 'tabs' });
+      setTab(3);
+      if (!installBannerDismissed() && platform.route !== 'installed' && platform.route !== 'desktop') {
+        setInstallOpen(true);
+        dismissInstallBanner();
+        setBannerGone(true);
+      }
+    },
+    [platform.route],
+  );
+
+  const saveAvatar = useCallback(
+    (avatar: AvatarConfig) => {
+      update((p) => ({ ...p, avatar }));
+      setView({ name: 'tabs' });
+      setTab(3);
+      toast('Looking good.', '✓');
+    },
+    [update, toast],
+  );
 
   if (loading || !profile) {
     return (
@@ -198,7 +246,7 @@ function Shell() {
             lesson={view.lesson}
             profile={profile}
             onUpdate={update}
-            onFinish={onFinishLesson}
+            onFinish={(result) => onFinishLesson(result, view.before)}
             onQuit={() => setView({ name: 'tabs' })}
           />
         </div>
@@ -220,7 +268,9 @@ function Shell() {
             level={view.reward.level}
             streak={profile.streak}
             seed={profile.lessonIndex}
-            onContinue={leaveLesson}
+            questsCompleted={view.reward.questsCompleted.length}
+            avatar={profile.avatar}
+            onContinue={() => leaveLesson(view.before)}
             onAgain={() => startLesson('course')}
           />
         </div>
@@ -248,6 +298,28 @@ function Shell() {
                 toast('Course switched. Your progress carried over.', '✓');
               }}
               onRerunWizard={() => setView({ name: 'wizard' })}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (view.name === 'avatar') {
+    return (
+      <div className="mapp">
+        <TopBar
+          title="Your mascot"
+          onBack={() => setView({ name: 'tabs' })}
+          gems={profile.gems}
+          streak={profile.streak}
+        />
+        <div className="mview" key="avatar">
+          <div className="pager__panel">
+            <AvatarCreator
+              initial={profile.avatar}
+              onSave={saveAvatar}
+              onCancel={() => setView({ name: 'tabs' })}
             />
           </div>
         </div>
@@ -353,15 +425,25 @@ function Shell() {
 
       <Pager
         index={tab}
-        onIndex={setTab}
+        onIndex={(next) => {
+          if (next !== 3) setReplayFrom(null);
+          setTab(next);
+        }}
         onPanelScroll={(panel, top) => {
           if (panel === tab) setCollapsed(top > 14);
         }}
       >
         {[
           <CoursePath key="course" profile={profile} onStart={() => startLesson('course')} onSkip={useSkip} />,
+          <Leaderboard key="league" profile={profile} />,
           <Shop key="shop" profile={profile} onUpdate={update} onToast={toast} />,
-          <ProfileScreen key="profile" profile={profile} onSettings={() => setView({ name: 'settings' })} />,
+          <ProfileScreen
+            key="profile"
+            profile={profile}
+            replayFrom={tab === 3 ? replayFrom : null}
+            onSettings={() => setView({ name: 'settings' })}
+            onEditAvatar={() => setView({ name: 'avatar' })}
+          />,
         ]}
       </Pager>
 

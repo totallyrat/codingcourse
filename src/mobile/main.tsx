@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MobileApp } from './MobileApp';
 import { registerServiceWorker } from './sw-register';
+import { installHaptics } from '@/lib/haptics';
 
 import '@/styles/tokens.css';
 import '@/styles/base.css';
@@ -35,3 +36,6 @@ createRoot(document.getElementById('root')!).render(
 );
 
 registerServiceWorker();
+// The WebKit haptic trick needs its element in the page before the first tap,
+// not created during it.
+installHaptics();

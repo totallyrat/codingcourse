@@ -1,11 +1,18 @@
 /**
  * A tap you can feel.
  *
- * Android and desktop Chromium have the Vibration API. Safari does not, and
- * on an iPhone that is the whole audience — so there is a second, best-effort
- * path: iOS 17.4 gives `<input type="checkbox" switch>` a real haptic when it
- * flips, and flipping a hidden one inside the same user gesture borrows it.
- * If a future iOS stops doing that, nothing breaks; the app just stops
+ * Two paths, because the platforms give you nothing in common:
+ *
+ * - Android and desktop Chromium have the Vibration API, and that is that.
+ * - Safari has no vibration API at all. What it does have, since iOS 17.4, is
+ *   a real haptic when a `<input type="checkbox" switch>` flips. Clicking a
+ *   hidden one borrows it. That only works from inside a user gesture, and
+ *   only if the element is already in the document — which is why the switch
+ *   is installed at start-up rather than the first time it is needed, and why
+ *   `haptic()` has to be called straight from the handler rather than after an
+ *   await.
+ *
+ * If a future iOS closes that door, nothing breaks; the app just stops
  * buzzing. Nothing here is load-bearing.
  */
 
@@ -42,26 +49,50 @@ export function setHapticsEnabled(on: boolean): void {
   } catch {
     /* private mode */
   }
-  if (on) haptic('tap');
+  if (on) haptic('win');
 }
 
-function iosTick(): void {
-  if (typeof document === 'undefined') return;
-  if (!iosSwitch) {
+/** True when this device has something that can actually produce a tick. */
+export function hapticsAvailable(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator.vibrate === 'function') return true;
+  // WebKit: the switch trick needs iOS 17.4 or later, which is also the first
+  // version where `switch` is a known attribute at all.
+  return typeof document !== 'undefined' && 'switch' in document.createElement('input');
+}
+
+/**
+ * Puts the hidden switch in the page. Called once at start-up: creating it
+ * lazily inside the first tap was too late, and the first tap never buzzed.
+ */
+export function installHaptics(): void {
+  if (typeof document === 'undefined' || iosSwitch) return;
+  const mount = () => {
+    if (iosSwitch || !document.body) return;
+    const label = document.createElement('label');
+    label.setAttribute('aria-hidden', 'true');
+    label.className = 'haptic-switch';
     const input = document.createElement('input');
     input.type = 'checkbox';
-    // `switch` is the attribute WebKit reacts to; every other engine sees a
-    // plain checkbox nobody can reach.
+    // `switch` is what WebKit reacts to; every other engine sees a checkbox
+    // nobody can reach.
     input.setAttribute('switch', '');
-    input.setAttribute('aria-hidden', 'true');
     input.tabIndex = -1;
-    input.style.cssText =
-      'position:fixed;left:-40px;bottom:0;width:24px;height:16px;opacity:0.001;pointer-events:none;';
-    document.body.appendChild(input);
+    label.appendChild(input);
+    document.body.appendChild(label);
     iosSwitch = input;
-  }
-  iosSwitch.checked = !iosSwitch.checked;
-  iosSwitch.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
+  else mount();
+}
+
+function iosTick(): boolean {
+  if (!iosSwitch) installHaptics();
+  if (!iosSwitch) return false;
+  // A real click, not a synthetic change event: the haptic comes from the
+  // activation behaviour, and dispatching `change` skips exactly that.
+  iosSwitch.click();
+  return true;
 }
 
 export function haptic(kind: Haptic = 'tap'): void {
@@ -69,10 +100,9 @@ export function haptic(kind: Haptic = 'tap'): void {
   const vibrate = navigator.vibrate?.bind(navigator);
   if (vibrate) {
     try {
-      vibrate(PATTERNS[kind]);
-      return;
+      if (vibrate(PATTERNS[kind])) return;
     } catch {
-      /* fall through */
+      /* fall through to the WebKit path */
     }
   }
   try {

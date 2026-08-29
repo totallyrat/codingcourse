@@ -76,6 +76,32 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// A reminder, when the platform is willing to wake us for one. Chrome grants
+// this to installed apps it sees you using; everything else falls back to the
+// in-page timer, and neither is allowed to nag you on a day you have practised.
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag !== 'codeling-reminder') return;
+  event.waitUntil(
+    self.registration.showNotification('Your streak is waiting', {
+      body: 'One short lesson keeps it alive.',
+      icon: './pwa/icon-192.png',
+      badge: './pwa/icon-192.png',
+      tag: 'codeling-reminder',
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const open = clients.find((client) => 'focus' in client);
+      if (open) return open.focus();
+      return self.clients.openWindow('./');
+    }),
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;

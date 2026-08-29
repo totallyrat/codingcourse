@@ -4,6 +4,7 @@ import { Bit, type BitMood } from '@/mascot/Bit';
 import { ExerciseElement, KIND_LABEL } from '@/components/exercises';
 import { grade as gradeAnswer, type Grade, type Response } from '@/engine/grader';
 import { recordAnswer } from '@/engine/progress';
+import { tipsFor } from '@/engine/tips';
 import { conceptLabel } from '@/content';
 import type { Lesson, LessonSlot, Profile } from '@/engine/types';
 
@@ -19,6 +20,8 @@ export interface LessonResult {
   seconds: number;
   perfect: boolean;
   missed: LessonSlot[];
+  /** Items that came back from the re-check queue and were answered right. */
+  rechecksCleared: number;
   outOfHearts: boolean;
 }
 
@@ -48,8 +51,11 @@ export function Lesson({
   const [grade, setGrade] = useState<Grade | null>(null);
   const [hearts, setHearts] = useState(MAX_HEARTS);
   const [breaking, setBreaking] = useState(false);
-  const [hintOpen, setHintOpen] = useState(false);
+  // How many of the escalating tips are on screen. The question stays open
+  // and answerable at every step; only "show the answer" gives up.
+  const [tipsShown, setTipsShown] = useState(0);
   const [correct, setCorrect] = useState(0);
+  const [rechecksCleared, setRechecksCleared] = useState(0);
   const [missed, setMissed] = useState<LessonSlot[]>([]);
   const [confirmQuit, setConfirmQuit] = useState(false);
 
@@ -58,13 +64,14 @@ export function Lesson({
   const slot = lesson.slots[index];
   const useHearts = profile.settings.hearts;
 
-  const mood: BitMood = grade ? (grade.correct ? 'happy' : 'wrong') : hintOpen ? 'thinking' : 'idle';
+  const mood: BitMood = grade ? (grade.correct ? 'happy' : 'wrong') : tipsShown > 0 ? 'thinking' : 'idle';
+  const tips = useMemo(() => (slot ? tipsFor(slot.exercise) : []), [slot]);
 
   useEffect(() => {
     itemStartedAt.current = Date.now();
     setResponse(null);
     setGrade(null);
-    setHintOpen(false);
+    setTipsShown(0);
   }, [index]);
 
   const check = useCallback(
@@ -80,11 +87,12 @@ export function Lesson({
 
       setGrade(result);
       onUpdate((p) =>
-        recordAnswer(p, slot.exercise, { correct: result.correct, seconds, usedHint: hintOpen }),
+        recordAnswer(p, slot.exercise, { correct: result.correct, seconds, usedHint: tipsShown > 0 }),
       );
 
       if (result.correct) {
         setCorrect((c) => c + 1);
+        if (slot.source === 'recheck') setRechecksCleared((n) => n + 1);
       } else {
         setMissed((m) => [...m, slot]);
         if (useHearts) {
@@ -94,7 +102,7 @@ export function Lesson({
         }
       }
     },
-    [grade, slot, response, hintOpen, onUpdate, useHearts],
+    [grade, slot, response, tipsShown, onUpdate, useHearts],
   );
 
   const advance = useCallback(() => {
@@ -108,12 +116,13 @@ export function Lesson({
         seconds: (Date.now() - startedAt.current) / 1000,
         perfect: correct === lesson.slots.length,
         missed,
+        rechecksCleared,
         outOfHearts: dead,
       });
       return;
     }
     setIndex((i) => i + 1);
-  }, [index, lesson, correct, missed, hearts, useHearts, onFinish]);
+  }, [index, lesson, correct, missed, rechecksCleared, hearts, useHearts, onFinish]);
 
   // Enter drives the whole lesson: check, then continue.
   useEffect(() => {
@@ -188,10 +197,21 @@ export function Lesson({
             submit={() => check()}
           />
 
-          {hintOpen && slot.exercise.hint && !grade ? (
-            <div className="hintbox">
-              <strong>Hint</strong>
-              <span>{slot.exercise.hint}</span>
+          {tipsShown > 0 && !grade ? (
+            <div className="tips">
+              {tips.slice(0, tipsShown).map((tip, i) => (
+                <div className="hintbox" key={tip.label}>
+                  <strong>{tip.label}</strong>
+                  <span>{tip.body}</span>
+                  {i === tipsShown - 1 && tipsShown < tips.length ? null : null}
+                </div>
+              ))}
+              {tipsShown >= tips.length ? (
+                <p className="tips__last">
+                  Still stuck? Showing the answer counts this one wrong — and puts it back in the next
+                  lesson, which is the point.
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -217,15 +237,15 @@ export function Lesson({
             </div>
           ) : (
             <div className="lesson__controls">
-              {slot.exercise.hint && !hintOpen ? (
-                <Button variant="ghost" onClick={() => setHintOpen(true)}>
-                  Hint
+              {tipsShown < tips.length ? (
+                <Button variant="ghost" onClick={() => setTipsShown((n) => n + 1)}>
+                  {tipsShown === 0 ? 'I am stuck' : 'Another tip'}
                 </Button>
-              ) : hintOpen || !slot.exercise.hint ? (
+              ) : (
                 <Button variant="ghost" onClick={() => check(true)}>
-                  I am stuck
+                  Show the answer
                 </Button>
-              ) : null}
+              )}
               <span className="spacer" />
               <Button variant="primary" size="lg" disabled={!response} onClick={() => check()}>
                 Check

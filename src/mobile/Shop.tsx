@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Mascot } from '@/mascot/Mascot';
 import { Sheet } from './Sheet';
 import { haptic } from '@/lib/haptics';
-import { BOOST_LESSONS, INSTANT_XP, SHOP, buyItem, type ShopItemId } from '@/engine/progress';
+import { BOOST_LESSONS, INSTANT_XP, SHOP, buyItem, openQuestChest, type ShopItemId } from '@/engine/progress';
 import type { Profile } from '@/engine/types';
 
 /* ============================================================================
@@ -84,6 +84,19 @@ export function Shop({
     else onToast(GRANT_TEXT[id], '✓');
   };
 
+  const openQuest = () => {
+    const preview = openQuestChest(profile);
+    if (!preview.ok) return;
+    haptic('win');
+    let granted: ShopItemId | null = null;
+    onUpdate((p) => {
+      const result = openQuestChest(p);
+      granted = result.granted;
+      return result.ok ? result.profile : p;
+    });
+    setReveal(granted);
+  };
+
   return (
     <div className="shop">
       <header className="shop__head">
@@ -96,6 +109,18 @@ export function Shop({
           {profile.gems}
         </span>
       </header>
+
+      {profile.inventory.chest > 0 ? (
+        <button type="button" className="questchest" onClick={openQuest}>
+          <span className="questchest__icon">{ICONS.chest}</span>
+          <span className="questchest__text">
+            <strong>
+              {profile.inventory.chest} quest chest{profile.inventory.chest === 1 ? '' : 's'}
+            </strong>
+            <span>Won from quests. Tap to open one.</span>
+          </span>
+        </button>
+      ) : null}
 
       <div className="held">
         <Held label="Streak Savers" value={profile.freezes} />

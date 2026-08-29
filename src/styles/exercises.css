@@ -371,6 +371,7 @@
 
 /* ------------------------------------------------------- wire */
 .wire {
+  position: relative;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--bg-sunken);
@@ -379,8 +380,50 @@
 .wire__canvas {
   display: block;
   width: 100%;
-  height: auto;
+  /* A definite height, so a wide graph gets room to be zoomed into rather
+     than collapsing to a 90px strip on a phone. */
+  height: clamp(190px, 40vh, 340px);
   touch-action: none;
+  cursor: grab;
+}
+.wire__canvas:active {
+  cursor: grabbing;
+}
+/* Viewport controls, sitting over the graph the way the editor's do. */
+.wire__zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.wire__zoom button {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(10, 10, 13, 0.86);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease), background var(--t-fast) linear;
+}
+.wire__zoom button:hover {
+  background: rgba(28, 28, 36, 0.95);
+  transform: translateY(-1px);
+}
+.wire__zoom button:active {
+  transform: scale(0.94);
+}
+.wire__zoom .wire__fit {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .wire__title {
   fill: var(--text);
@@ -410,6 +453,16 @@
 .wire__pinhit:hover + .wire__pin {
   stroke: #fff;
   fill: #fff;
+}
+.wire__pin.is-open {
+  /* A pin you could legally drop on, while a wire is in the air. */
+  filter: drop-shadow(0 0 6px currentColor);
+  opacity: 1;
+}
+.wire__refused {
+  font-size: var(--step--1);
+  color: var(--wrong);
+  animation: shake 320ms linear;
 }
 .wire__pin.is-armed {
   fill: #fff;

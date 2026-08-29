@@ -1,5 +1,6 @@
 import { clearMistake, memoryFor, queueMistake, reviewConcept } from './scheduler';
 import { applyLesson, freshLevel, type LevelChange, type LevelState } from './levels';
+import { applyLessonToQuests, ensureWeek, markPaid, type Quest } from './quests';
 import type { AnswerOutcome, Course, Exercise, Profile, Skill, SkillId, TrackId } from './types';
 
 /* ============================================================================
@@ -52,9 +53,11 @@ export function createProfile(id: string, name = 'Learner'): Profile {
     lastActiveDate: null,
     freezes: 2,
     gems: 40,
-    inventory: { streakSaver: 0, superBoost: 0, lessonSkip: 0 },
+    inventory: { streakSaver: 0, superBoost: 0, lessonSkip: 0, chest: 0 },
     boostLessons: 0,
     levels: {},
+    quests: null,
+    avatar: null,
     days: [],
     settings: {
       hearts: true,
@@ -62,6 +65,7 @@ export function createProfile(id: string, name = 'Learner'): Profile {
       dailyGoalXp: 60,
       reduceMotion: false,
       fontScale: 1,
+      reminders: { enabled: false, hour: 19, minute: 0 },
     },
     createdAt: Date.now(),
   };
@@ -139,6 +143,12 @@ export interface LessonSummary {
   trackId: TrackId;
   /** Items in the lesson that were at or above the learner's level. */
   atLevel: number;
+  /** The composer had no at-level material left — see Lesson.starved. */
+  starved?: boolean;
+  /** Items from the re-check queue that were answered right this time. */
+  rechecksCleared?: number;
+  /** Skills that crossed 75% because of this lesson. */
+  skillsMastered?: number;
 }
 
 export interface LessonReward {
@@ -148,6 +158,8 @@ export interface LessonReward {
   /** Whether a Super Boost was spent on this lesson. */
   boosted: boolean;
   level: LevelChange;
+  /** Quests this lesson finished off — one chest each, already granted. */
+  questsCompleted: Quest[];
 }
 
 /** Applies end-of-lesson bookkeeping: XP, gems, the ladder, the streak, the day log. */
@@ -162,11 +174,13 @@ export function completeLesson(profile: Profile, summary: LessonSummary, now = n
     score,
     atLevel: summary.atLevel,
     total: summary.total,
+    starved: summary.starved,
   });
 
   const date = todayKey(now);
   const days = [...profile.days];
   const todayIdx = days.findIndex((d) => d.date === date);
+
   const dayRecord = todayIdx >= 0 ? { ...days[todayIdx] } : { date, xp: 0, lessons: 0, correct: 0, answered: 0, seconds: 0 };
   dayRecord.xp += xpEarned;
   dayRecord.lessons += 1;
@@ -199,6 +213,24 @@ export function completeLesson(profile: Profile, summary: LessonSummary, now = n
     }
   }
 
+  // Quests are settled last, because they read the streak and the level move
+  // this lesson just produced.
+  const questsBefore = ensureWeek(profile.quests, profile.id, now);
+  const applied = applyLessonToQuests(questsBefore, {
+    xp: xpEarned,
+    gems: gemsEarned,
+    correct: summary.correct,
+    total: summary.total,
+    perfect: summary.perfect,
+    seconds: summary.seconds,
+    rechecksCleared: summary.rechecksCleared ?? 0,
+    skillsMastered: summary.skillsMastered ?? 0,
+    levelsClimbed: level.moved === 'up' ? 1 : 0,
+    streak,
+  });
+  const questsCompleted = applied.completed;
+  const quests = markPaid(applied.state, questsCompleted.map((q) => q.id));
+
   return {
     profile: {
       ...profile,
@@ -206,6 +238,8 @@ export function completeLesson(profile: Profile, summary: LessonSummary, now = n
       gems: profile.gems + gemsEarned,
       boostLessons: Math.max(0, profile.boostLessons - 1),
       levels: { ...profile.levels, [summary.trackId]: level.state },
+      quests,
+      inventory: { ...profile.inventory, chest: profile.inventory.chest + questsCompleted.length },
       lessonIndex: profile.lessonIndex + 1,
       skillProgress: {
         ...profile.skillProgress,
@@ -221,6 +255,7 @@ export function completeLesson(profile: Profile, summary: LessonSummary, now = n
     gemsEarned,
     boosted,
     level,
+    questsCompleted,
   };
 }
 
@@ -345,6 +380,22 @@ export function grant(profile: Profile, id: ShopItemId, now = new Date()): Profi
     default:
       return profile;
   }
+}
+
+/**
+ * Opens a chest won from a quest. Same table as the shop's chest, but free —
+ * the gems were the quest.
+ */
+export function openQuestChest(profile: Profile, roll = Math.random(), now = new Date()): Purchase {
+  if (profile.inventory.chest <= 0) {
+    return { profile, ok: false, granted: null, reason: 'No chests to open.' };
+  }
+  const granted = CHEST_TABLE[Math.min(CHEST_TABLE.length - 1, Math.floor(roll * CHEST_TABLE.length))];
+  const opened: Profile = {
+    ...profile,
+    inventory: { ...profile.inventory, chest: profile.inventory.chest - 1 },
+  };
+  return { profile: grant(opened, granted, now), ok: true, granted };
 }
 
 /**

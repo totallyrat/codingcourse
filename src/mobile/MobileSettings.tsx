@@ -4,7 +4,14 @@ import { Settings } from '@/screens/Settings';
 import { InstallSheet } from './InstallSheet';
 import { currentPlatform } from './platform';
 import { disableTilt, enableTilt, tiltEnabled, tiltSupported } from './tilt';
-import { hapticsEnabled, setHapticsEnabled } from '@/lib/haptics';
+import {
+  cancelReminder,
+  permissionState,
+  reminderCaveat,
+  requestReminders,
+  testNotification,
+} from './notifications';
+import { haptic, hapticsAvailable, hapticsEnabled, setHapticsEnabled } from '@/lib/haptics';
 import type { Profile } from '@/engine/types';
 
 /**
@@ -26,6 +33,7 @@ export function MobileSettings({
   const [installOpen, setInstallOpen] = useState(false);
   const [haptics, setHaptics] = useState(hapticsEnabled());
   const [tilt, setTilt] = useState(tiltEnabled());
+  const reminders = profile.settings.reminders;
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
@@ -84,17 +92,86 @@ export function MobileSettings({
           <div className="settingrow__text">
             <span className="settingrow__title">Haptics</span>
             <span className="settingrow__note">
-              A tick when you answer, and a longer one when a lesson lands. Silent on hardware without a
-              vibration motor.
+              {hapticsAvailable()
+                ? 'A tick when you answer, and a longer one when a lesson lands. On iPhone it borrows the tick a switch makes, so it only fires on a real tap.'
+                : 'This device has nothing that can produce a tick, so this does nothing here.'}
             </span>
           </div>
-          <div className="settingrow__control">
+          <div className="settingrow__control settingrow__control--wrap">
+            <Button size="sm" variant="ghost" onClick={() => haptic('win')}>
+              Test
+            </Button>
             <Toggle
               checked={haptics}
               label="Haptics"
               onChange={(v) => {
                 setHapticsEnabled(v);
                 setHaptics(v);
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="settingrow">
+          <div className="settingrow__text">
+            <span className="settingrow__title">Daily reminder</span>
+            <span className="settingrow__note">
+              A nudge at the time you pick, skipped on any day you have already practised.{' '}
+              {reminderCaveat(platform.ios, platform.route === 'installed')}
+            </span>
+          </div>
+          <div className="settingrow__control settingrow__control--wrap">
+            {reminders.enabled ? (
+              <>
+                <input
+                  type="time"
+                  className="timeinput"
+                  value={`${String(reminders.hour).padStart(2, '0')}:${String(reminders.minute).padStart(2, '0')}`}
+                  onChange={(e) => {
+                    const [hour, minute] = e.target.value.split(':').map(Number);
+                    if (Number.isFinite(hour) && Number.isFinite(minute)) {
+                      onUpdate((p) => ({
+                        ...p,
+                        settings: { ...p.settings, reminders: { ...p.settings.reminders, hour, minute } },
+                      }));
+                    }
+                  }}
+                />
+                <Button size="sm" variant="ghost" onClick={() => void testNotification()}>
+                  Test
+                </Button>
+              </>
+            ) : null}
+            <Toggle
+              checked={reminders.enabled}
+              label="Daily reminder"
+              onChange={(v) => {
+                if (!v) {
+                  cancelReminder();
+                  onUpdate((p) => ({
+                    ...p,
+                    settings: { ...p.settings, reminders: { ...p.settings.reminders, enabled: false } },
+                  }));
+                  return;
+                }
+                void requestReminders().then((result) => {
+                  if (result === 'on') {
+                    onUpdate((p) => ({
+                      ...p,
+                      settings: { ...p.settings, reminders: { ...p.settings.reminders, enabled: true } },
+                    }));
+                    toast('Reminder set. Test it from here if you like.', '✓');
+                  } else if (result === 'denied') {
+                    toast(
+                      permissionState() === 'denied'
+                        ? 'Notifications are blocked for this site in your browser settings.'
+                        : 'No permission, no reminder.',
+                      '·',
+                    );
+                  } else {
+                    toast('This browser has no notifications at all.', '·');
+                  }
+                });
               }}
             />
           </div>

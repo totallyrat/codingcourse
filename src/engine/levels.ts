@@ -62,6 +62,11 @@ export interface LessonVerdict {
   atLevel: number;
   /** Items in the lesson in total. */
   total: number;
+  /**
+   * The composer had no at-level material left to serve — the lesson was thin
+   * because the library is, not because the learner took an easy one.
+   */
+  starved?: boolean;
 }
 
 export interface LevelChange {
@@ -83,7 +88,15 @@ export function applyLesson(state: LevelState, verdict: LessonVerdict): LevelCha
   const recent = [...state.recent, Math.round(verdict.score * 100)].slice(-8);
   // A quarter of the lesson, or three items, whichever is smaller — short
   // lessons on a five-item budget should still be able to promote.
-  const enoughAtLevel = verdict.atLevel >= Math.min(3, Math.ceil(verdict.total * 0.25));
+  const need = Math.min(3, Math.ceil(verdict.total * 0.25));
+  // ...unless the composer reports it had nothing at this level left to give.
+  // A skill whose material all sits above the current rung would otherwise
+  // freeze the ladder for good: no at-level items, so no promotion, so the
+  // harder material never unlocks. That escape asks for a flawless lesson,
+  // which is stronger evidence than the 85% the normal path takes, so it
+  // cannot be used to buy an easy climb.
+  const starved = verdict.starved === true && verdict.score >= 0.999;
+  const enoughAtLevel = verdict.atLevel >= need || starved;
 
   if (verdict.score >= PROMOTE_AT && enoughAtLevel) {
     const run = state.run + 1;

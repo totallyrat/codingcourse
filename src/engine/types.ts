@@ -11,6 +11,7 @@
    ========================================================================== */
 
 import type { LevelState } from './levels';
+import type { QuestState } from './quests';
 
 export type TrackId = string;
 export type ConceptId = string;
@@ -157,14 +158,30 @@ export interface BugExercise extends ExerciseCommon {
 }
 
 /** Wire node graphs — Unreal Blueprints, Unity Visual Scripting, shader graphs. */
+
+/**
+ * Blueprint pin types, with Unreal's own colours and shapes in the UI: exec
+ * pins are white arrows, data pins are coloured circles, and the two never
+ * connect to each other.
+ */
+export type PinType = 'exec' | 'bool' | 'float' | 'int' | 'string' | 'object' | 'vector' | 'wildcard';
+
+export interface WirePin {
+  name: string;
+  type: PinType;
+}
+
+/** A pin is either just a name (exec, or an untyped data pin) or a typed one. */
+export type PinSpec = string | WirePin;
+
 export interface WireNode {
   id: string;
   title: string;
   subtitle?: string;
   x: number;
   y: number;
-  inputs?: string[];
-  outputs?: string[];
+  inputs?: PinSpec[];
+  outputs?: PinSpec[];
   tone?: 'event' | 'flow' | 'data' | 'action';
 }
 export interface WireExercise extends ExerciseCommon {
@@ -308,6 +325,24 @@ export interface Inventory {
   streakSaver: number;
   superBoost: number;
   lessonSkip: number;
+  /** Chests won from quests, waiting to be opened. */
+  chest: number;
+}
+
+/**
+ * A made-up mascot. Saved with the profile because it is the learner's, not
+ * the app's — the drawing of it lives in src/mascot.
+ */
+export interface AvatarConfig {
+  name: string;
+  head: 'round' | 'square' | 'tall' | 'wide' | 'blob';
+  colour: string;
+  eyes: 'round' | 'wide' | 'sleepy' | 'visor';
+  mouth: 'smile' | 'flat' | 'oh';
+  crown: 'none' | 'caret' | 'leaf' | 'bulb' | 'horns';
+  arms: 'bracket' | 'mitt' | 'none';
+  outfit: 'none' | 'scarf' | 'tie' | 'collar' | 'cape';
+  outfitColour: string;
 }
 
 export interface Profile {
@@ -336,6 +371,10 @@ export interface Profile {
   boostLessons: number;
   /** Ladder state per track: level, the run towards the next one, slips. */
   levels: Record<TrackId, LevelState>;
+  /** This week's quests, or null before the first week has been generated. */
+  quests: QuestState | null;
+  /** The learner's own mascot, or null while they are still using Bit. */
+  avatar: AvatarConfig | null;
   days: DayRecord[];
   settings: {
     hearts: boolean;
@@ -343,6 +382,8 @@ export interface Profile {
     dailyGoalXp: number;
     reduceMotion: boolean;
     fontScale: number;
+    /** Daily reminder. `hour`/`minute` are local time. */
+    reminders: { enabled: boolean; hour: number; minute: number };
   };
   createdAt: number;
 }
@@ -371,6 +412,11 @@ export interface Lesson {
   proving: number;
   /** Items at or above that level — what makes the lesson able to promote. */
   atLevel: number;
+  /**
+   * The library had nothing at this level left to serve. Kept so the ladder
+   * can tell a thin skill from an easy day.
+   */
+  starved?: boolean;
   slots: LessonSlot[];
   /** Counts by source, used for the pre-lesson briefing. */
   mix: Record<LessonSlotSource, number>;

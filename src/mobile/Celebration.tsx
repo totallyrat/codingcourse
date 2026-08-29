@@ -4,6 +4,7 @@ import { Confetti } from './Confetti';
 import { GemIcon } from './Shop';
 import { haptic } from '@/lib/haptics';
 import type { LevelChange } from '@/engine/levels';
+import type { AvatarConfig } from '@/engine/types';
 
 /* ============================================================================
    The end of a lesson.
@@ -24,12 +25,16 @@ export interface CelebrationProps {
   level: LevelChange;
   streak: number;
   seed: number;
+  /** Quests this lesson finished — a chest each. */
+  questsCompleted: number;
+  /** The learner's own mascot, if they have made one. */
+  avatar: AvatarConfig | null;
   onContinue: () => void;
   onAgain: () => void;
 }
 
 export function Celebration(props: CelebrationProps) {
-  const { correct, total, seconds, xpEarned, gemsEarned, level, boosted, streak, seed } = props;
+  const { correct, total, seconds, xpEarned, gemsEarned, level, boosted, streak, seed, questsCompleted, avatar } = props;
   const accuracy = total ? Math.round((correct / total) * 100) : 0;
   const perfect = correct === total && total > 0;
   const species = speciesFor(seed);
@@ -62,7 +67,14 @@ export function Celebration(props: CelebrationProps) {
       <Confetti run={perfect || level.moved === 'up'} from={0.34} />
 
       <div className="celebrate__stage">
-        <Mascot species={species.id} mood="celebrate" size={190} trackPointer={false} />
+        {/* Your own creature turns up every other lesson, once you have made one. */}
+        <Mascot
+          species={species.id}
+          custom={avatar && seed % 2 === 0 ? avatar : null}
+          mood="celebrate"
+          size={190}
+          trackPointer={false}
+        />
       </div>
 
       <h1 className="celebrate__title">{headline}</h1>
@@ -71,7 +83,9 @@ export function Celebration(props: CelebrationProps) {
       ) : level.moved === 'down' ? (
         <p className="celebrate__sub">Easing the level back a step. Nothing lost — build the run again.</p>
       ) : (
-        <p className="celebrate__sub">{species.name} approves.</p>
+        <p className="celebrate__sub">
+          {(avatar && seed % 2 === 0 ? avatar.name : species.name) || species.name} approves.
+        </p>
       )}
 
       <div className="scoreboard">
@@ -94,6 +108,13 @@ export function Celebration(props: CelebrationProps) {
           <span className="scoreboard__label">gems</span>
         </div>
       </div>
+
+      {questsCompleted ? (
+        <p className="celebrate__quests">
+          {questsCompleted} quest{questsCompleted === 1 ? '' : 's'} complete ·{' '}
+          {questsCompleted === 1 ? 'a chest' : `${questsCompleted} chests`} waiting in the shop
+        </p>
+      ) : null}
 
       <p className="celebrate__line">
         {correct} of {total} · {Math.max(1, Math.round(seconds / 60))} min · {streak} day streak

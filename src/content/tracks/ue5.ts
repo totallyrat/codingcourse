@@ -273,9 +273,9 @@ export const ue5Exercises = forTrack('ue5', [
     kind: 'wire',
     prompt: 'Wire the Health variable into Print String so it prints the current value.',
     nodes: [
-      { id: 'begin', title: 'Event BeginPlay', tone: 'event', x: 20, y: 40, outputs: ['exec'] },
-      { id: 'health', title: 'Health', subtitle: 'Float', tone: 'data', x: 20, y: 150, outputs: ['value'] },
-      { id: 'print', title: 'Print String', tone: 'action', x: 300, y: 60, inputs: ['exec', 'In String'], outputs: ['exec'] },
+      { id: 'begin', title: 'Event BeginPlay', tone: 'event', x: 20, y: 40, outputs: [{ name: 'exec', type: 'exec' }] },
+      { id: 'health', title: 'Health', subtitle: 'Float', tone: 'data', x: 20, y: 150, outputs: [{ name: 'value', type: 'float' }] },
+      { id: 'print', title: 'Print String', tone: 'action', x: 300, y: 60, inputs: [{ name: 'exec', type: 'exec' }, { name: 'In String', type: 'string' }], outputs: [{ name: 'exec', type: 'exec' }] },
     ],
     links: [
       ['begin:exec', 'print:exec'],
@@ -307,11 +307,11 @@ export const ue5Exercises = forTrack('ue5', [
     kind: 'wire',
     prompt: 'Wire a Branch so the door only opens when Is Locked is false.',
     nodes: [
-      { id: 'begin', title: 'Event ActorBeginOverlap', tone: 'event', x: 20, y: 30, outputs: ['exec'] },
-      { id: 'locked', title: 'Is Locked', subtitle: 'Boolean', tone: 'data', x: 20, y: 150, outputs: ['value'] },
-      { id: 'not', title: 'NOT', tone: 'data', x: 200, y: 150, inputs: ['A'], outputs: ['result'] },
-      { id: 'branch', title: 'Branch', tone: 'flow', x: 330, y: 40, inputs: ['exec', 'Condition'], outputs: ['True', 'False'] },
-      { id: 'open', title: 'Open Door', tone: 'action', x: 500, y: 30, inputs: ['exec'] },
+      { id: 'begin', title: 'Event ActorBeginOverlap', tone: 'event', x: 20, y: 30, outputs: [{ name: 'exec', type: 'exec' }] },
+      { id: 'locked', title: 'Is Locked', subtitle: 'Boolean', tone: 'data', x: 20, y: 150, outputs: [{ name: 'value', type: 'bool' }] },
+      { id: 'not', title: 'NOT', tone: 'data', x: 200, y: 150, inputs: [{ name: 'A', type: 'bool' }], outputs: [{ name: 'result', type: 'bool' }] },
+      { id: 'branch', title: 'Branch', tone: 'flow', x: 330, y: 40, inputs: [{ name: 'exec', type: 'exec' }, { name: 'Condition', type: 'bool' }], outputs: [{ name: 'True', type: 'exec' }, { name: 'False', type: 'exec' }] },
+      { id: 'open', title: 'Open Door', tone: 'action', x: 500, y: 30, inputs: [{ name: 'exec', type: 'exec' }] },
     ],
     links: [
       ['begin:exec', 'branch:exec'],

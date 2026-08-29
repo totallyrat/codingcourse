@@ -1,27 +1,47 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Mascot } from '@/mascot/Mascot';
 import { GemIcon } from './Shop';
+import { Quests } from './Quests';
 import { tiltGaze } from './tilt';
 import { conceptLabel, trackById } from '@/content';
 import { skillMastery, weakestConcepts } from '@/engine/lessonComposer';
 import { levelFor, levelFromXp, todayKey, xpToday } from '@/engine/progress';
 import { MAX_LEVEL, levelBlurb, runNeeded } from '@/engine/levels';
+import { weeklyXp } from '@/engine/leaderboard';
 import type { Profile } from '@/engine/types';
 
 /* ============================================================================
    Profile.
 
-   Where Progress used to be, and deliberately mostly bars. A number with a
-   bar behind it says "here is how far along you are" in one glance; the same
+   Where Progress used to be, and deliberately mostly bars. A number with a bar
+   behind it says "here is how far along you are" in one glance; the same
    number in a paragraph says nothing until you have read the paragraph.
+
+   `replayFrom` is the post-lesson mode: every bar mounts holding the value it
+   had *before* the lesson and is released a beat later, top of the screen
+   first, so you watch the lesson you just finished move each one.
    ========================================================================== */
 
-export function ProfileScreen({ profile, onSettings }: { profile: Profile; onSettings: () => void }) {
+export function ProfileScreen({
+  profile,
+  replayFrom,
+  onSettings,
+  onEditAvatar,
+}: {
+  profile: Profile;
+  replayFrom?: Profile | null;
+  onSettings: () => void;
+  onEditAvatar: () => void;
+}) {
   const course = profile.course;
   const track = course ? trackById(course.trackId) : undefined;
   const level = levelFromXp(profile.xp);
   const ladder = levelFor(profile, course?.trackId ?? '');
   const today = xpToday(profile);
+  const replayRef = useRef<HTMLDivElement>(null);
+
+  const beforeLevel = replayFrom ? levelFromXp(replayFrom.xp) : null;
+  const beforeLadder = replayFrom ? levelFor(replayFrom, course?.trackId ?? '') : null;
 
   const skillBars = useMemo(() => {
     if (!course || !track) return [];
@@ -29,11 +49,22 @@ export function ProfileScreen({ profile, onSettings }: { profile: Profile; onSet
     return course.syllabus
       .map((id) => byId.get(id))
       .filter((s): s is NonNullable<typeof s> => !!s)
-      .map((skill) => ({ id: skill.id, title: skill.title, value: skillMastery(profile, skill) }))
+      .map((skill) => ({
+        id: skill.id,
+        title: skill.title,
+        value: skillMastery(profile, skill),
+        from: replayFrom ? skillMastery(replayFrom, skill) : undefined,
+      }))
       .filter((row) => row.value > 0.02)
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
-  }, [course, track, profile]);
+  }, [course, track, profile, replayFrom]);
+
+  const weak = useMemo(() => {
+    const now = weakestConcepts(profile, 3);
+    const before = replayFrom ? new Map(weakestConcepts(replayFrom, 12).map((w) => [w.concept, w.strength])) : null;
+    return now.map((row) => ({ ...row, from: before?.get(row.concept) }));
+  }, [profile, replayFrom]);
 
   const week = useMemo(() => {
     const out: Array<{ label: string; xp: number; today: boolean }> = [];
@@ -52,24 +83,44 @@ export function ProfileScreen({ profile, onSettings }: { profile: Profile; onSet
   }, [profile.days]);
 
   const weekMax = Math.max(profile.settings.dailyGoalXp, ...week.map((d) => d.xp));
-  const done = course && track
-    ? course.syllabus.filter((id) => {
-        const skill = track.skills.find((s) => s.id === id);
-        return skill ? skillMastery(profile, skill) >= 0.75 : false;
-      }).length
-    : 0;
-  const weak = weakestConcepts(profile, 3);
+  const doneSkills = (p: Profile) =>
+    course && track
+      ? course.syllabus.filter((id) => {
+          const skill = track.skills.find((s) => s.id === id);
+          return skill ? skillMastery(p, skill) >= 0.75 : false;
+        }).length
+      : 0;
+  const done = doneSkills(profile);
+
+  // Scroll back to the top when the replay starts, or the animation happens
+  // wherever the panel happened to be left.
+  useEffect(() => {
+    if (replayFrom) replayRef.current?.scrollIntoView({ block: 'start' });
+  }, [replayFrom]);
+
+  const questsFrom = useMemo(() => {
+    if (!replayFrom?.quests) return undefined;
+    return Object.fromEntries(replayFrom.quests.quests.map((q) => [q.id, q.progress]));
+  }, [replayFrom]);
 
   return (
-    <div className="profile">
+    <div className="profile" ref={replayRef}>
       <header className="profile__head">
-        <span className="profile__avatar">
-          <Mascot species="bit" mood={profile.streak > 2 ? 'happy' : 'idle'} size={92} trackPointer={false} gazeSource={tiltGaze} />
-        </span>
+        <button type="button" className="profile__avatar" onClick={onEditAvatar} aria-label="Edit your mascot">
+          <Mascot
+            custom={profile.avatar}
+            species="bit"
+            mood={profile.streak > 2 ? 'happy' : 'idle'}
+            size={92}
+            trackPointer={false}
+            gazeSource={tiltGaze}
+          />
+          <span className="profile__edit">Edit</span>
+        </button>
         <div className="profile__id">
-          <h2>{profile.name}</h2>
+          <h2>{profile.avatar?.name || profile.name}</h2>
           <p className="muted">
-            {track?.name ?? 'No course yet'} · joined {new Date(profile.createdAt).toLocaleDateString()}
+            {track?.name ?? 'No course yet'} · {weeklyXp(profile)} XP this week
           </p>
         </div>
         <button type="button" className="iconbtn" aria-label="Settings" onClick={onSettings}>
@@ -87,13 +138,40 @@ export function ProfileScreen({ profile, onSettings }: { profile: Profile; onSet
         <Tile value={`L${ladder.level}`} label="course level" tone="right" />
       </div>
 
-      <Bar label="Today" value={today} max={profile.settings.dailyGoalXp} suffix="XP" tone="streak" />
-      <Bar label={`Level ${level.level}`} value={level.into} max={level.needed} suffix="XP" />
-      {course ? <Bar label="Course" value={done} max={course.syllabus.length} suffix="skills" tone="right" /> : null}
+      <Bar
+        label="Today"
+        value={today}
+        from={replayFrom ? xpToday(replayFrom) : undefined}
+        delay={200}
+        max={profile.settings.dailyGoalXp}
+        suffix="XP"
+        tone="streak"
+      />
+      <Bar
+        label={`Level ${level.level}`}
+        value={level.into}
+        from={beforeLevel && beforeLevel.level === level.level ? beforeLevel.into : undefined}
+        delay={500}
+        max={level.needed}
+        suffix="XP"
+      />
+      {course ? (
+        <Bar
+          label="Course"
+          value={done}
+          from={replayFrom ? doneSkills(replayFrom) : undefined}
+          delay={800}
+          max={course.syllabus.length}
+          suffix="skills"
+          tone="right"
+        />
+      ) : null}
       {ladder.level < MAX_LEVEL ? (
         <Bar
           label={`Ladder · level ${ladder.level}`}
           value={ladder.run}
+          from={beforeLadder && beforeLadder.level === ladder.level ? beforeLadder.run : undefined}
+          delay={1100}
           max={runNeeded(ladder.level)}
           suffix="strong lessons"
         />
@@ -115,8 +193,16 @@ export function ProfileScreen({ profile, onSettings }: { profile: Profile; onSet
       {skillBars.length ? (
         <section className="profile__block">
           <h4>Strongest skills</h4>
-          {skillBars.map((row) => (
-            <Bar key={row.id} label={row.title} value={row.value} max={1} slim />
+          {skillBars.map((row, i) => (
+            <Bar
+              key={row.id}
+              label={row.title}
+              value={row.value}
+              from={row.from}
+              delay={1500 + i * 160}
+              max={1}
+              slim
+            />
           ))}
         </section>
       ) : null}
@@ -124,11 +210,22 @@ export function ProfileScreen({ profile, onSettings }: { profile: Profile; onSet
       {weak.length ? (
         <section className="profile__block">
           <h4>Needs work</h4>
-          {weak.map((row) => (
-            <Bar key={row.concept} label={conceptLabel(row.concept)} value={row.strength} max={1} slim tone="wrong" />
+          {weak.map((row, i) => (
+            <Bar
+              key={row.concept}
+              label={conceptLabel(row.concept)}
+              value={row.strength}
+              from={row.from}
+              delay={2300 + i * 160}
+              max={1}
+              slim
+              tone="wrong"
+            />
           ))}
         </section>
       ) : null}
+
+      <Quests state={profile.quests} animateFrom={questsFrom} chests={profile.inventory.chest} />
     </div>
   );
 }
@@ -153,6 +250,8 @@ function Tile({
 function Bar({
   label,
   value,
+  from,
+  delay = 0,
   max,
   suffix,
   tone,
@@ -160,18 +259,36 @@ function Bar({
 }: {
   label: string;
   value: number;
+  /** Where the bar was before the lesson. Given, the bar replays the change. */
+  from?: number;
+  delay?: number;
   max: number;
   suffix?: string;
   tone?: 'streak' | 'right' | 'wrong';
   slim?: boolean;
 }) {
-  const pct = max <= 0 ? 0 : Math.max(0, Math.min(1, value / max));
+  const [shown, setShown] = useState(from ?? value);
+  const released = useRef(false);
+
+  useEffect(() => {
+    if (from === undefined || released.current) {
+      setShown(value);
+      return;
+    }
+    released.current = true;
+    const timer = setTimeout(() => setShown(value), delay);
+    return () => clearTimeout(timer);
+  }, [from, value, delay]);
+
+  const pct = max <= 0 ? 0 : Math.max(0, Math.min(1, shown / max));
+  const moved = from !== undefined && Math.abs(value - from) > 0.001;
+
   return (
-    <div className={`bigbar${slim ? ' bigbar--slim' : ''}${tone ? ` bigbar--${tone}` : ''}`}>
+    <div className={`bigbar${slim ? ' bigbar--slim' : ''}${tone ? ` bigbar--${tone}` : ''}${moved ? ' is-moving' : ''}`}>
       <div className="bigbar__row">
         <span className="bigbar__label">{label}</span>
         <span className="bigbar__value">
-          {suffix ? `${Math.round(value)} / ${Math.round(max)}` : `${Math.round(pct * 100)}%`}
+          {suffix ? `${Math.round(shown)} / ${Math.round(max)}` : `${Math.round(pct * 100)}%`}
         </span>
       </div>
       <div className="bigbar__track">

@@ -52,6 +52,11 @@ export interface ComposeInput {
 }
 
 const RECHECK_SHARE = 0.4;
+/**
+ * Below this a concept counts as not learned yet, and the composer will reach
+ * up to two levels for material that teaches it rather than leave it alone.
+ */
+const WEAK_ENOUGH_TO_REACH = 0.6;
 
 /** Ordering preference when two items of the same type compete for a slot. */
 const SOURCE_RANK: Record<LessonSlotSource, number> = {
@@ -417,15 +422,56 @@ export function composeLesson(input: ComposeInput): Lesson {
       for (const concept of conceptOrder) {
         if (chosen.length >= slotCount) break;
         const seenKinds = chosen.slice(-2).map((s) => s.exercise.kind);
+        // A concept the learner has not got yet is the whole point of the
+        // lesson. If everything teaching it sits above their level, reach up
+        // two rungs rather than skip it: skipping leaves the concept weak
+        // forever, so its skill can never be mastered and the syllabus never
+        // moves on. That is how a course quietly stalls halfway, with the
+        // learner re-answering the two concepts they already know.
+        const unmet = decayedStrength(memoryFor(profile, concept), profile.lessonIndex) < WEAK_ENOUGH_TO_REACH;
         const ex = chooseForConcept(concept, index, profile, used, rand, {
           targetDifficulty: Math.min(5, 1 + pass + Math.round(decayedStrength(memoryFor(profile, concept), profile.lessonIndex) * 2)),
           avoidKinds: seenKinds,
           kindCounts,
           allowPrimary: reached,
           levelOf,
-          maxLevel: learnerLevel,
+          maxLevel: unmet ? learnerLevel + 2 : learnerLevel,
         });
-        if (ex) add(ex, 'new');
+        if (ex) add(ex, levelOf(ex) > learnerLevel ? 'stretch' : 'new');
+      }
+    }
+  }
+
+  // --- 3b. the skill's own material, one rung up --------------------------
+  // A skill whose questions all sit above the learner's level would otherwise
+  // produce a lesson made entirely of revision: one own item and eleven
+  // easier ones from skills already finished. That is not a lesson about this
+  // skill, and — because promotion needs items at your level — it also froze
+  // the ladder, so the harder material never unlocked. Reaching up for the
+  // skill's own gentlest unused questions fixes both: the lesson teaches what
+  // it says it teaches, and the climb has something to measure.
+  if (mode === 'course' && chosen.length < slotCount) {
+    const ownSoFar = chosen.filter((slot) => slot.own).length;
+    const ownFloor = Math.min(3, Math.max(1, Math.ceil(slotCount * 0.25)));
+    if (ownSoFar < ownFloor) {
+      const reachable: Exercise[] = [];
+      const seenHere = new Set<ExerciseId>();
+      for (const concept of skill.concepts) {
+        for (const ex of index.byConcept.get(concept) ?? []) {
+          if (used.has(ex.id) || seenHere.has(ex.id)) continue;
+          if (!ownConcepts.has(ex.concepts[0])) continue;
+          seenHere.add(ex.id);
+          reachable.push(ex);
+        }
+      }
+      reachable.sort((a, b) => levelOf(a) - levelOf(b) || a.difficulty - b.difficulty);
+      let added = ownSoFar;
+      for (const ex of reachable) {
+        if (added >= ownFloor || chosen.length >= slotCount) break;
+        // The same two-rung allowance the backfill uses. Past that the honest
+        // answer is that this skill is not ready for this learner yet.
+        if (levelOf(ex) > learnerLevel + 2) break;
+        if (add(ex, levelOf(ex) > learnerLevel ? 'stretch' : 'new')) added++;
       }
     }
   }
@@ -523,6 +569,21 @@ export function composeLesson(input: ComposeInput): Lesson {
   const mix: Record<LessonSlotSource, number> = { recheck: 0, review: 0, new: 0, stretch: 0, warmup: 0 };
   for (const slot of arranged) mix[slot.source]++;
 
+  // Did the library still have something at this level to offer? If it did and
+  // the lesson went easy anyway, that is an easy day and the ladder should say
+  // so. If it did not, the lesson was starved, and the ladder is told so it
+  // cannot lock a learner under a skill it has no level-appropriate material
+  // for.
+  const atLevelCount = arranged.filter((slot) => levelOf(slot.exercise) >= learnerLevel).length;
+  const needAtLevel = Math.min(3, Math.ceil(arranged.length * 0.25));
+  const spareAtLevel = library.some(
+    (ex) =>
+      !used.has(ex.id) &&
+      reached.has(ex.concepts[0]) &&
+      levelOf(ex) >= learnerLevel &&
+      levelOf(ex) <= learnerLevel + 2,
+  );
+
   return {
     id: `${course.trackId}-l${profile.lessonIndex + 1}-${mode}`,
     index: profile.lessonIndex + 1,
@@ -530,7 +591,8 @@ export function composeLesson(input: ComposeInput): Lesson {
     title: mode === 'review' ? 'Weak spots' : skill.title,
     level: learnerLevel,
     proving: arranged.filter((slot) => levelOf(slot.exercise) > learnerLevel).length,
-    atLevel: arranged.filter((slot) => levelOf(slot.exercise) >= learnerLevel).length,
+    atLevel: atLevelCount,
+    starved: mode === 'course' && atLevelCount < needAtLevel && !spareAtLevel,
     slots: arranged,
     mix,
   };
