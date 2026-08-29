@@ -106,10 +106,10 @@ export const typescriptExtra = forTrack('typescript', [
     difficulty: 2,
     level: 3,
     kind: 'blank',
-    prompt: 'Make nickname optional.',
-    template: 'interface User {\n  name: string;\n  nickname{{0}}: string;\n}',
+    prompt: 'Make the title argument optional, so greet("Ada") compiles.',
+    template: 'function greet(name: string, title{{0}}: string) {\n  return title ? `${title} ${name}` : name;\n}',
     blanks: [{ accept: ['?'], width: 2 }],
-    explain: 'The ? makes the property optional, which means its type is really string | undefined.',
+    explain: 'An optional parameter has to come after the required ones, and inside the function its type is string | undefined.',
   },
   {
     id: 'ts.alias.x1',

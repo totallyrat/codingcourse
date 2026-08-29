@@ -235,10 +235,10 @@ export const pythonExtra = forTrack('python', [
     level: 2,
     kind: 'predict',
     prompt: 'What does this print?',
-    code: 'print(7 / 2)\nprint(7 // 2)',
-    options: ['3.5\n3', '3\n3.5', '3.5\n3.5', '3\n3'],
+    code: 'print(-7 // 2)',
+    options: ['-4', '-3', '-3.5', '3'],
     answer: 0,
-    explain: 'One slash always gives a float. Two slashes throw the remainder away.',
+    explain: '// floors, it does not chop: it rounds towards negative infinity, so -3.5 becomes -4 rather than -3.',
   },
   {
     id: 'py.cast.x1',
@@ -267,10 +267,10 @@ export const pythonExtra = forTrack('python', [
     level: 1,
     kind: 'predict',
     prompt: 'What does this print?',
-    code: 'print("ab" * 3)',
-    options: ['ababab', 'ab3', 'aaabbb', 'an error'],
+    code: 'print("cod" + "ing")',
+    options: ['coding', 'cod ing', 'cod+ing', 'an error'],
     answer: 0,
-    explain: 'Multiplying a string repeats it. It is one of the few places * is not maths.',
+    explain: '+ glues two strings together exactly as they are — no space is added, which is the mistake to watch for.'
   },
   {
     id: 'py.fstr.x1',

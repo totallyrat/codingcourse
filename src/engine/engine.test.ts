@@ -491,6 +491,37 @@ describe('content library', () => {
     }
   });
 
+  it('never asks the same question twice', () => {
+    // Two exercises with the same prompt, about the same concept, with the
+    // same answer are the same exercise — and the composer will happily put
+    // both in one lesson, which is exactly how it was found.
+    const norm = (text: string) => text.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+    const answerOf = (ex: Exercise): string => {
+      switch (ex.kind) {
+        case 'choice': return norm(ex.answer.map((i) => ex.options[i]).join('|'));
+        case 'predict': return norm(ex.options[ex.answer] ?? '');
+        case 'match': return norm(ex.pairs.map((p) => p.join('=')).sort().join('|'));
+        case 'assemble': return norm(ex.answer.join(' '));
+        case 'order': return norm(ex.lines.join(' '));
+        case 'blank': return norm(ex.blanks.map((b) => b.accept.join('/')).join('|'));
+        case 'bug': return norm(`${ex.code}:${ex.buggyLine}`);
+        case 'terminal': return norm(ex.accept.join('|'));
+        case 'wire': return norm(ex.links.map((l) => l.join('>')).sort().join('|'));
+        default: return norm(ex.prompt);
+      }
+    };
+
+    const seen = new Map<string, string>();
+    const dupes: string[] = [];
+    for (const ex of allExercises()) {
+      const key = `${norm(ex.prompt)}::${ex.concepts[0]}::${answerOf(ex)}`;
+      const first = seen.get(key);
+      if (first) dupes.push(`${first} and ${ex.id}`);
+      else seen.set(key, ex.id);
+    }
+    expect(dupes).toEqual([]);
+  });
+
   it('gives every exercise an explanation to learn from', () => {
     const missing = allExercises().filter((e) => !e.explain || e.explain.length < 12);
     expect(missing.map((e) => e.id)).toEqual([]);
