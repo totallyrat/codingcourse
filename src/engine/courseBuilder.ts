@@ -268,6 +268,16 @@ export function buildCourse(track: Track, answers: WizardAnswers): Course {
  * matters more than the arithmetic — past about fifteen items a lesson stops
  * feeling like a session and starts feeling like an exam.
  */
+/**
+ * How long a lesson should actually be, given the time budget *and* the rung
+ * the learner is on. Early lessons are short on purpose: seven questions you
+ * can answer beats sixteen that grind you down, and the ladder lengthens them
+ * as it raises them.
+ */
+export function lessonSize(minutesPerDay: number, level: number): number {
+  return Math.max(5, Math.min(slotsForBudget(minutesPerDay), 6 + level));
+}
+
 export function slotsForBudget(minutesPerDay: number): number {
   const perItemSeconds = 45;
   return Math.max(6, Math.min(16, Math.round((minutesPerDay * 60) / perItemSeconds)));

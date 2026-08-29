@@ -1,5 +1,6 @@
 import { clearMistake, memoryFor, queueMistake, reviewConcept } from './scheduler';
-import type { AnswerOutcome, Course, Exercise, Profile, SkillId } from './types';
+import { applyLesson, freshLevel, type LevelChange, type LevelState } from './levels';
+import type { AnswerOutcome, Course, Exercise, Profile, Skill, SkillId, TrackId } from './types';
 
 /* ============================================================================
    Profile lifecycle: creation, recording answers, XP, streaks.
@@ -13,6 +14,8 @@ import type { AnswerOutcome, Course, Exercise, Profile, SkillId } from './types'
 export const XP_PER_CORRECT = 10;
 export const XP_LESSON_BONUS = 20;
 export const XP_PERFECT_BONUS = 15;
+export const GEMS_PER_LESSON = 12;
+export const GEMS_PERFECT_BONUS = 8;
 
 export function todayKey(now = new Date()): string {
   // Local date, not UTC: a streak should break at the learner's midnight.
@@ -48,6 +51,10 @@ export function createProfile(id: string, name = 'Learner'): Profile {
     bestStreak: 0,
     lastActiveDate: null,
     freezes: 2,
+    gems: 40,
+    inventory: { streakSaver: 0, superBoost: 0, lessonSkip: 0 },
+    boostLessons: 0,
+    levels: {},
     days: [],
     settings: {
       hearts: true,
@@ -69,6 +76,11 @@ export function setCourse(profile: Profile, course: Course): Profile {
     archived: archived.filter((c) => c.trackId !== course.trackId),
     settings: { ...profile.settings, hearts: course.answers.hearts },
   };
+}
+
+/** The ladder state for a track, defaulted rather than undefined. */
+export function levelFor(profile: Profile, trackId: TrackId): LevelState {
+  return profile.levels[trackId] ?? freshLevel();
 }
 
 /**
@@ -123,19 +135,34 @@ export interface LessonSummary {
   total: number;
   seconds: number;
   perfect: boolean;
-  xpEarned: number;
   skillId: SkillId;
-  newCrowns: SkillId[];
+  trackId: TrackId;
+  /** Items in the lesson that were at or above the learner's level. */
+  atLevel: number;
 }
 
-/** Applies end-of-lesson bookkeeping: XP, the streak, the day log. */
-export function completeLesson(
-  profile: Profile,
-  summary: Omit<LessonSummary, 'xpEarned' | 'newCrowns'>,
-  now = new Date(),
-): { profile: Profile; xpEarned: number } {
-  const xpEarned =
-    summary.correct * XP_PER_CORRECT + XP_LESSON_BONUS + (summary.perfect ? XP_PERFECT_BONUS : 0);
+export interface LessonReward {
+  profile: Profile;
+  xpEarned: number;
+  gemsEarned: number;
+  /** Whether a Super Boost was spent on this lesson. */
+  boosted: boolean;
+  level: LevelChange;
+}
+
+/** Applies end-of-lesson bookkeeping: XP, gems, the ladder, the streak, the day log. */
+export function completeLesson(profile: Profile, summary: LessonSummary, now = new Date()): LessonReward {
+  const boosted = profile.boostLessons > 0;
+  const base = summary.correct * XP_PER_CORRECT + XP_LESSON_BONUS + (summary.perfect ? XP_PERFECT_BONUS : 0);
+  const xpEarned = boosted ? base * 2 : base;
+  const gemsEarned = GEMS_PER_LESSON + (summary.perfect ? GEMS_PERFECT_BONUS : 0);
+
+  const score = summary.total ? summary.correct / summary.total : 0;
+  const level = applyLesson(levelFor(profile, summary.trackId), {
+    score,
+    atLevel: summary.atLevel,
+    total: summary.total,
+  });
 
   const date = todayKey(now);
   const days = [...profile.days];
@@ -176,6 +203,9 @@ export function completeLesson(
     profile: {
       ...profile,
       xp: profile.xp + xpEarned,
+      gems: profile.gems + gemsEarned,
+      boostLessons: Math.max(0, profile.boostLessons - 1),
+      levels: { ...profile.levels, [summary.trackId]: level.state },
       lessonIndex: profile.lessonIndex + 1,
       skillProgress: {
         ...profile.skillProgress,
@@ -188,6 +218,175 @@ export function completeLesson(
       days: trimmed,
     },
     xpEarned,
+    gemsEarned,
+    boosted,
+    level,
+  };
+}
+
+/* ------------------------------------------------------------------- shop */
+
+export type ShopItemId = 'streakSaver' | 'superBoost' | 'instantXp' | 'lessonSkip' | 'chest';
+
+export interface ShopItem {
+  id: ShopItemId;
+  name: string;
+  blurb: string;
+  price: number;
+}
+
+/**
+ * Five things to spend gems on. Every one of them maps onto a mechanic that
+ * already exists — a streak saver is the freeze the scheduler was already
+ * spending for you, a skip really does credit the skill — so nothing here is
+ * a number that only moves in the shop.
+ */
+export const SHOP: ShopItem[] = [
+  {
+    id: 'streakSaver',
+    name: 'Streak Saver',
+    blurb: 'Miss a day and this is spent instead of your streak. Stacks.',
+    price: 50,
+  },
+  {
+    id: 'superBoost',
+    name: 'Super Boost',
+    blurb: 'Double XP for your next three lessons.',
+    price: 80,
+  },
+  {
+    id: 'instantXp',
+    name: 'Instant XP',
+    blurb: '150 XP straight away, and it counts towards today\u2019s goal.',
+    price: 60,
+  },
+  {
+    id: 'lessonSkip',
+    name: 'Lesson Skip',
+    blurb: 'Marks one lesson as passed. Keeps the XP, skips the practice.',
+    price: 100,
+  },
+  {
+    id: 'chest',
+    name: 'Mystery Chest',
+    blurb: 'One of the other four. You find out when you open it.',
+    price: 70,
+  },
+];
+
+const CHEST_TABLE: ShopItemId[] = [
+  'streakSaver',
+  'streakSaver',
+  'superBoost',
+  'superBoost',
+  'instantXp',
+  'instantXp',
+  'instantXp',
+  'lessonSkip',
+];
+
+export const INSTANT_XP = 150;
+export const BOOST_LESSONS = 3;
+
+export interface Purchase {
+  profile: Profile;
+  ok: boolean;
+  /** What was actually granted — a chest resolves to one of the others. */
+  granted: ShopItemId | null;
+  reason?: string;
+}
+
+/** Buys one item. Chests resolve here, so the caller cannot peek first. */
+export function buyItem(profile: Profile, id: ShopItemId, roll = Math.random(), now = new Date()): Purchase {
+  const item = SHOP.find((s) => s.id === id);
+  if (!item) return { profile, ok: false, granted: null, reason: 'No such item.' };
+  if (profile.gems < item.price) {
+    return { profile, ok: false, granted: null, reason: `${item.price - profile.gems} more gems needed.` };
+  }
+
+  const granted: ShopItemId =
+    id === 'chest' ? CHEST_TABLE[Math.min(CHEST_TABLE.length - 1, Math.floor(roll * CHEST_TABLE.length))] : id;
+
+  let next: Profile = { ...profile, gems: profile.gems - item.price };
+  next = grant(next, granted, now);
+  return { profile: next, ok: true, granted };
+}
+
+/** Applies an item's effect. Split out so a chest and a direct buy agree. */
+export function grant(profile: Profile, id: ShopItemId, now = new Date()): Profile {
+  switch (id) {
+    case 'streakSaver':
+      return {
+        ...profile,
+        freezes: profile.freezes + 1,
+        inventory: { ...profile.inventory, streakSaver: profile.inventory.streakSaver + 1 },
+      };
+    case 'superBoost':
+      return {
+        ...profile,
+        boostLessons: profile.boostLessons + BOOST_LESSONS,
+        inventory: { ...profile.inventory, superBoost: profile.inventory.superBoost + 1 },
+      };
+    case 'lessonSkip':
+      return {
+        ...profile,
+        inventory: { ...profile.inventory, lessonSkip: profile.inventory.lessonSkip + 1 },
+      };
+    case 'instantXp': {
+      const date = todayKey(now);
+      const days = [...profile.days];
+      const idx = days.findIndex((d) => d.date === date);
+      const record = idx >= 0 ? { ...days[idx] } : { date, xp: 0, lessons: 0, correct: 0, answered: 0, seconds: 0 };
+      record.xp += INSTANT_XP;
+      if (idx >= 0) days[idx] = record;
+      else days.push(record);
+      return { ...profile, xp: profile.xp + INSTANT_XP, days };
+    }
+    default:
+      return profile;
+  }
+}
+
+/**
+ * Spends a Lesson Skip on a skill: it is credited as passed, and the XP for a
+ * clean lesson is paid out. The practice is genuinely skipped — the concepts
+ * are marked as seen, so the scheduler will still bring them round for review
+ * rather than pretending they were learned properly.
+ */
+export function spendLessonSkip(profile: Profile, skill: Skill, now = new Date()): Profile {
+  if (profile.inventory.lessonSkip <= 0) return profile;
+  const concepts = { ...profile.concepts };
+  for (const concept of skill.concepts) {
+    const before = memoryFor(profile, concept);
+    concepts[concept] = {
+      ...before,
+      seen: Math.max(2, before.seen),
+      correct: Math.max(2, before.correct),
+      strength: Math.max(0.8, before.strength),
+      interval: Math.max(3, before.interval),
+      dueLesson: profile.lessonIndex + 3,
+      lastLesson: profile.lessonIndex,
+      streak: Math.max(1, before.streak),
+    };
+  }
+
+  const date = todayKey(now);
+  const days = [...profile.days];
+  const idx = days.findIndex((d) => d.date === date);
+  const record = idx >= 0 ? { ...days[idx] } : { date, xp: 0, lessons: 0, correct: 0, answered: 0, seconds: 0 };
+  record.xp += XP_LESSON_BONUS;
+  record.lessons += 1;
+  if (idx >= 0) days[idx] = record;
+  else days.push(record);
+
+  return {
+    ...profile,
+    concepts,
+    days,
+    xp: profile.xp + XP_LESSON_BONUS,
+    lessonIndex: profile.lessonIndex + 1,
+    skillProgress: { ...profile.skillProgress, [skill.id]: (profile.skillProgress[skill.id] ?? 0) + 1 },
+    inventory: { ...profile.inventory, lessonSkip: profile.inventory.lessonSkip - 1 },
   };
 }
 

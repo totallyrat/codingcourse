@@ -14,7 +14,7 @@ import { bridge } from '@/lib/bridge';
 import { exercisesForTrack, trackById } from '@/content';
 import { composeLesson } from '@/engine/lessonComposer';
 import { slotsForBudget } from '@/engine/courseBuilder';
-import { completeLesson, createProfile, setCourse } from '@/engine/progress';
+import { completeLesson, createProfile, levelFor, setCourse } from '@/engine/progress';
 import type { Course, Lesson as LessonModel, Profile } from '@/engine/types';
 
 type View =
@@ -62,6 +62,7 @@ function Shell() {
         library: exercisesForTrack(track.id),
         mode,
         slots: slotsForBudget(profile.course.answers.minutesPerDay),
+        level: levelFor(profile, track.id).level,
       });
       if (!lesson.slots.length) {
         toast('Nothing to practise right now — start a course lesson instead.', '·');
@@ -107,6 +108,8 @@ function Shell() {
           seconds: result.seconds,
           perfect: result.perfect,
           skillId: result.lesson.skillId,
+          trackId: p.course?.trackId ?? '',
+          atLevel: result.lesson.atLevel,
         });
         // The XP figure is needed by the results screen, so it is stashed on
         // the view rather than recomputed there.

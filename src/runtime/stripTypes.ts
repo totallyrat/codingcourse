@@ -230,9 +230,20 @@ function stripVariableAnnotations(src: string): string {
 
 /** `speed: number = 5;` written as a class field on its own line. */
 function stripClassFieldAnnotations(src: string): string {
-  return src.replace(
-    /^([ \t]*(?:static\s+)?[A-Za-z_$][\w$]*)\s*:\s*[A-Za-z_$][\w$.<>[\]|&\s]*?(\s*(?:=|;)\s*)$/gm,
-    (full, head: string, tail: string) => (/[+\-*/%]/.test(full) ? full : head + tail),
+  // Two shapes to catch, and the second used to be missed entirely:
+  //   readonly max: number;          -> readonly max;
+  //   private items: number[] = [];  -> private items = [];
+  // A field with both a modifier and an initialiser is the common case in
+  // real code, and leaving its annotation behind produces a class body that
+  // is not JavaScript at all.
+  const MODIFIERS = '(?:public|private|protected|readonly|static|declare|override|abstract)';
+  const pattern = new RegExp(
+    `^([ \\t]*(?:${MODIFIERS}\\s+)*[A-Za-z_$][\\w$]*)\\??\\s*:\\s*[A-Za-z_$][\\w$.<>[\\]|&\\s]*?(\\s*(?:=[^\\n]*|;)\\s*)$`,
+    'gm',
+  );
+  return src.replace(pattern, (full, head: string, tail: string) =>
+    // An arithmetic operator means this was never an annotation.
+    /[+\-*/%]/.test(full.slice(0, full.indexOf('=') === -1 ? full.length : full.indexOf('='))) ? full : head + tail,
   );
 }
 

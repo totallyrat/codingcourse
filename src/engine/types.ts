@@ -10,6 +10,8 @@
      courseBuilder.ts and lessonComposer.ts operating over this library.
    ========================================================================== */
 
+import type { LevelState } from './levels';
+
 export type TrackId = string;
 export type ConceptId = string;
 export type SkillId = string;
@@ -32,6 +34,9 @@ export type ExerciseKind =
 
 export type Difficulty = 1 | 2 | 3 | 4 | 5;
 
+/** Where an exercise sits on the ten-level ladder. See engine/levels.ts. */
+export type Level = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
 export type Interest =
   | 'games'
   | 'web'
@@ -52,6 +57,11 @@ export interface ExerciseCommon {
   /** First entry is the primary concept — the one mastery is credited to. */
   concepts: ConceptId[];
   difficulty: Difficulty;
+  /**
+   * Authored position on the ten-level ladder. Left out, it is derived from
+   * the skill's place in the track and the difficulty — see buildLevelIndex.
+   */
+  level?: Level;
   prompt: string;
   /** Highlighting language; defaults to the track's. */
   lang?: string;
@@ -293,6 +303,13 @@ export interface DayRecord {
   seconds: number;
 }
 
+/** Everything the shop sells, and what the learner is holding. */
+export interface Inventory {
+  streakSaver: number;
+  superBoost: number;
+  lessonSkip: number;
+}
+
 export interface Profile {
   version: 1;
   id: string;
@@ -312,6 +329,13 @@ export interface Profile {
   bestStreak: number;
   lastActiveDate: string | null;
   freezes: number;
+  /** Shop currency. Earned by finishing lessons; spent in the shop. */
+  gems: number;
+  inventory: Inventory;
+  /** Lessons still covered by a Super Boost, doubling their XP. */
+  boostLessons: number;
+  /** Ladder state per track: level, the run towards the next one, slips. */
+  levels: Record<TrackId, LevelState>;
   days: DayRecord[];
   settings: {
     hearts: boolean;
@@ -332,6 +356,8 @@ export interface LessonSlot {
   source: LessonSlotSource;
   /** Populated for 'recheck' — how many times this was missed before. */
   misses?: number;
+  /** True when this is the lesson's own skill rather than padding around it. */
+  own?: boolean;
 }
 
 export interface Lesson {
@@ -339,6 +365,12 @@ export interface Lesson {
   index: number;
   skillId: SkillId;
   title: string;
+  /** The ladder level this lesson was drawn at. */
+  level: number;
+  /** Items pitched one level above, as a question you are allowed to fail. */
+  proving: number;
+  /** Items at or above that level — what makes the lesson able to promote. */
+  atLevel: number;
   slots: LessonSlot[];
   /** Counts by source, used for the pre-lesson briefing. */
   mix: Record<LessonSlotSource, number>;

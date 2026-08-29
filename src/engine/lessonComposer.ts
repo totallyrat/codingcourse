@@ -1,4 +1,5 @@
 import { hashString, mulberry32, shuffle } from './rng';
+import { buildLevelIndex } from './levels';
 import { decayedStrength, dueConcepts, dueMistakes, memoryFor } from './scheduler';
 import type {
   Course,
@@ -28,6 +29,12 @@ import type {
    3. New material from the current skill, easiest first.
    4. One stretch item, only when you have earned it.
 
+   All of it is filtered through the ten-level ladder: the lesson is drawn at
+   the learner's level for this track, with a single item from the level above
+   as the thing they are allowed to fail. That is what stops lesson three from
+   being the hardest question in the library, and it is why the beginning is
+   gentle without the end being empty.
+
    Then the whole thing is arranged for pacing: a gentle warm-up first, no
    three identical element types in a row, and the hardest item never last.
    ========================================================================== */
@@ -40,6 +47,8 @@ export interface ComposeInput {
   /** 'course' advances the syllabus; 'review' drills only weak material. */
   mode?: 'course' | 'review';
   slots?: number;
+  /** The learner's rung on the ten-level ladder for this track. */
+  level?: number;
 }
 
 const RECHECK_SHARE = 0.4;
@@ -140,9 +149,14 @@ function chooseForConcept(
     /** Concepts the learner has reached; an exercise is only served if this is
      *  what it is mainly *about*. */
     allowPrimary?: Set<string>;
+    /** The ladder: where each exercise sits, and how high this pick may go. */
+    levelOf?: (ex: Exercise) => number;
+    maxLevel?: number;
+    /** Allow reaching above the ceiling rather than returning nothing. */
+    relax?: boolean;
   } = {},
 ): Exercise | null {
-  const candidates = (index.byConcept.get(concept) ?? []).filter((ex) => {
+  const pool = (index.byConcept.get(concept) ?? []).filter((ex) => {
     if (used.has(ex.id)) return false;
     // An exercise is indexed under every concept it touches, which is what
     // lets a dictionary question also count as KeyError practice. But it must
@@ -151,7 +165,20 @@ function chooseForConcept(
     if (opts.allowPrimary && !opts.allowPrimary.has(ex.concepts[0])) return false;
     return true;
   });
-  if (!candidates.length) return null;
+  if (!pool.length) return null;
+
+  // The ladder is a hard ceiling. Only the last-resort pass sets `relax`, and
+  // then only the gentlest thing available gets through — a short lesson is
+  // worse than one slightly hard question, but it is the last thing tried.
+  const levelOf = opts.levelOf;
+  const ceiling = opts.maxLevel;
+  let candidates = pool;
+  if (levelOf && ceiling !== undefined) {
+    const within = pool.filter((ex) => levelOf(ex) <= ceiling);
+    if (within.length) candidates = within;
+    else if (opts.relax) candidates = [pool.reduce((best, ex) => (levelOf(ex) < levelOf(best) ? ex : best), pool[0])];
+    else return null;
+  }
 
   const strength = decayedStrength(memoryFor(profile, concept), profile.lessonIndex);
   const target = opts.targetDifficulty ?? Math.max(1, Math.min(5, Math.round(1 + strength * 3.6)));
@@ -172,6 +199,13 @@ function chooseForConcept(
     // tracks are naturally choice-heavy, and without this the variety has to
     // be rescued by the arranger, which can only do so much.
     score -= (opts.kindCounts?.get(ex.kind) ?? 0) * 0.85;
+    // Sit on the learner's rung. Something well below it is revision and
+    // still useful; something above it is the thing that made lesson three
+    // feel like an exam, so it costs much more.
+    if (levelOf && ceiling !== undefined) {
+      const gap = levelOf(ex) - ceiling;
+      score += gap > 0 ? -3.5 * gap : -0.45 * Math.min(3, -gap);
+    }
     // A little noise so two identical profiles do not walk identical paths.
     score += rand() * 0.7;
     return { ex, score };
@@ -212,7 +246,7 @@ function arrange(slots: LessonSlot[], rand: () => number): LessonSlot[] {
   for (const [kind, list] of buckets) {
     for (let i = 0; i < list.length; i++) {
       if (!isGentle(list[i])) continue;
-      const rank = SOURCE_RANK[list[i].source] * 10 + list[i].exercise.difficulty;
+      const rank = (list[i].own ? 0 : 100) + SOURCE_RANK[list[i].source] * 10 + list[i].exercise.difficulty;
       if (rank < warmRank) {
         warmRank = rank;
         warmKind = kind;
@@ -255,7 +289,10 @@ function arrange(slots: LessonSlot[], rand: () => number): LessonSlot[] {
     // Within a type: the lesson's own material first, then by difficulty, so
     // padding drawn from elsewhere never leads the lesson.
     list.sort(
-      (a, b) => SOURCE_RANK[a.source] - SOURCE_RANK[b.source] || a.exercise.difficulty - b.exercise.difficulty,
+      (a, b) =>
+        Number(!!b.own) - Number(!!a.own) ||
+        SOURCE_RANK[a.source] - SOURCE_RANK[b.source] ||
+        a.exercise.difficulty - b.exercise.difficulty,
     );
     out.push(list.shift()!);
     if (!list.length) buckets.delete(bestKind);
@@ -275,9 +312,25 @@ function arrange(slots: LessonSlot[], rand: () => number): LessonSlot[] {
   return out;
 }
 
+/** One level index per track, kept because a lesson is composed on every open. */
+const levelCache = new Map<string, Map<ExerciseId, number>>();
+
+function levelIndexFor(track: Track, library: Exercise[]): Map<ExerciseId, number> {
+  const key = `${track.id}:${library.length}`;
+  let index = levelCache.get(key);
+  if (!index) {
+    index = buildLevelIndex(track, library);
+    levelCache.set(key, index);
+  }
+  return index;
+}
+
 export function composeLesson(input: ComposeInput): Lesson {
   const { profile, course, track, library, mode = 'course' } = input;
   const index = indexLibrary(library);
+  const levels = levelIndexFor(track, library);
+  const levelOf = (ex: Exercise) => levels.get(ex.id) ?? 5;
+  const learnerLevel = Math.max(1, Math.min(10, input.level ?? 1));
   const rand = mulberry32(hashString(`${profile.id}:${profile.lessonIndex}:${mode}`));
   const skill = activeSkill(profile, course, track);
   const slotCount = input.slots ?? 12;
@@ -301,10 +354,27 @@ export function composeLesson(input: ComposeInput): Lesson {
   // Running tally of element types already in the lesson, so selection can
   // spread them out instead of leaving it all to the arranger.
   const kindCounts = new Map<ExerciseKind, number>();
+  // Where each concept sits in the syllabus, so late padding can never leap
+  // over a skill that contributed nothing.
+  const positionOf = new Map<string, number>();
+  course.syllabus.forEach((id, i) => {
+    for (const concept of conceptsOf(id)) if (!positionOf.has(concept)) positionOf.set(concept, i);
+  });
+  const reaches = (ex: Exercise): boolean => {
+    const pos = positionOf.get(ex.concepts[0]);
+    if (pos === undefined) return true;
+    const highest = chosen.reduce((max, slot) => {
+      const at = positionOf.get(slot.exercise.concepts[0]);
+      return at === undefined ? max : Math.max(max, at);
+    }, position < 0 ? 0 : position);
+    return pos <= highest + 1;
+  };
+
+  const ownConcepts = new Set(skill.concepts);
   const add = (exercise: Exercise, source: LessonSlotSource, misses?: number) => {
     if (used.has(exercise.id) || chosen.length >= slotCount) return false;
     used.add(exercise.id);
-    chosen.push({ exercise, source, misses });
+    chosen.push({ exercise, source, misses, own: ownConcepts.has(exercise.concepts[0]) });
     kindCounts.set(exercise.kind, (kindCounts.get(exercise.kind) ?? 0) + 1);
     return true;
   };
@@ -327,6 +397,8 @@ export function composeLesson(input: ComposeInput): Lesson {
     const ex = chooseForConcept(concept, index, profile, used, rand, {
       kindCounts,
       allowPrimary: reached,
+      levelOf,
+      maxLevel: learnerLevel,
     });
     if (ex && add(ex, 'review')) reviews++;
   }
@@ -350,24 +422,31 @@ export function composeLesson(input: ComposeInput): Lesson {
           avoidKinds: seenKinds,
           kindCounts,
           allowPrimary: reached,
+          levelOf,
+          maxLevel: learnerLevel,
         });
         if (ex) add(ex, 'new');
       }
     }
   }
 
-  // --- 4. stretch ---------------------------------------------------------
+  // --- 4. the proving item ------------------------------------------------
+  // One item from the level above, and only one: this is the question the
+  // ladder is watching. Getting it wrong costs nothing but a recheck; getting
+  // it right, lesson after lesson, is what moves the learner up.
   const recentAccuracy = accuracy(profile);
-  if (mode === 'course' && chosen.length < slotCount && recentAccuracy >= 0.8) {
+  if (mode === 'course' && chosen.length < slotCount && recentAccuracy >= 0.7 && learnerLevel < 10) {
     const ahead = course.syllabus.indexOf(skill.id) + 1;
     const nextSkill = track.skills.find((s) => s.id === course.syllabus[ahead]);
-    for (const concept of nextSkill?.concepts ?? []) {
+    const reach = [...skill.concepts, ...(nextSkill?.concepts ?? [])];
+    for (const concept of reach) {
       const ex = chooseForConcept(concept, index, profile, used, rand, {
-        targetDifficulty: 2,
         kindCounts,
         allowPrimary: reached,
+        levelOf,
+        maxLevel: learnerLevel + 1,
       });
-      if (ex && add(ex, 'stretch')) break;
+      if (ex && levelOf(ex) > learnerLevel && add(ex, 'stretch')) break;
     }
   }
 
@@ -388,6 +467,8 @@ export function composeLesson(input: ComposeInput): Lesson {
       const ex = chooseForConcept(concept, index, profile, used, rand, {
         kindCounts,
         allowPrimary: reached,
+        levelOf,
+        maxLevel: learnerLevel,
       });
       if (ex) add(ex, mode === 'review' ? 'review' : 'new');
     }
@@ -403,8 +484,37 @@ export function composeLesson(input: ComposeInput): Lesson {
         const ex = chooseForConcept(concept, index, profile, used, rand, {
           kindCounts,
           allowPrimary: reached,
+          levelOf,
+          maxLevel: learnerLevel,
         });
-        if (ex) add(ex, mode === 'review' ? 'review' : 'new');
+        if (ex && reaches(ex)) add(ex, mode === 'review' ? 'review' : 'new');
+      }
+    }
+
+    // Everything in the library at this level is spent. Rather than hand back
+    // a short lesson, reach up — but globally gentlest first, not concept by
+    // concept. Going concept by concept here once put a level six question in
+    // a first lesson while a level three sat unused two concepts along.
+    if (chosen.length < slotCount) {
+      const spare: Exercise[] = [];
+      const seenHere = new Set<ExerciseId>();
+      for (const concept of [...skill.concepts, ...reached]) {
+        for (const ex of index.byConcept.get(concept) ?? []) {
+          if (used.has(ex.id) || seenHere.has(ex.id)) continue;
+          if (!reached.has(ex.concepts[0])) continue;
+          seenHere.add(ex.id);
+          spare.push(ex);
+        }
+      }
+      spare.sort((a, b) => levelOf(a) - levelOf(b) || a.difficulty - b.difficulty);
+      for (const ex of spare) {
+        if (chosen.length >= slotCount) break;
+        // Two rungs is the whole allowance. Past that a short lesson is the
+        // better answer: nobody ever gave up on this app because a lesson had
+        // nine questions instead of twelve, and plenty would over a level
+        // eight question in their first week.
+        if (levelOf(ex) > learnerLevel + 2) break;
+        if (reaches(ex)) add(ex, mode === 'review' ? 'review' : 'new');
       }
     }
   }
@@ -418,6 +528,9 @@ export function composeLesson(input: ComposeInput): Lesson {
     index: profile.lessonIndex + 1,
     skillId: skill.id,
     title: mode === 'review' ? 'Weak spots' : skill.title,
+    level: learnerLevel,
+    proving: arranged.filter((slot) => levelOf(slot.exercise) > learnerLevel).length,
+    atLevel: arranged.filter((slot) => levelOf(slot.exercise) >= learnerLevel).length,
     slots: arranged,
     mix,
   };

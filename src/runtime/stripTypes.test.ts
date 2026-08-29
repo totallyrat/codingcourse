@@ -48,6 +48,13 @@ describe('stripTypes removes annotations', () => {
     expect(strip(src)).toBe(src);
   });
 
+  it('strips an annotation from a class field that carries modifiers', () => {
+    const out = strip('class Q {\n  private items: number[] = [];\n  readonly max: number = 10;\n}');
+    expect(out).toContain('items = [];');
+    expect(out).toContain('max = 10;');
+    expect(out).not.toContain('number');
+  });
+
   it('strips as-assertions and non-null markers', () => {
     expect(strip('const n = value as number;')).toBe('const n = value;');
     expect(strip('const v = maybe!;')).toBe('const v = maybe;');

@@ -1,17 +1,30 @@
 import type { Exercise, Skill, SkillId, Track, TrackId } from '@/engine/types';
 import { pythonTrack, pythonExercises } from './tracks/python';
+import { pythonExtra, pythonExtraSkills } from './tracks/python.extra';
 import { javascriptTrack, javascriptExercises } from './tracks/javascript';
+import { javascriptExtra, javascriptExtraSkills } from './tracks/javascript.extra';
 import { typescriptTrack, typescriptExercises } from './tracks/typescript';
+import { typescriptExtra, typescriptExtraSkills } from './tracks/typescript.extra';
 import { webTrack, webExercises } from './tracks/web';
+import { webExtra, webExtraSkills } from './tracks/web.extra';
 import { cppTrack, cppExercises } from './tracks/cpp';
+import { cppExtra, cppExtraSkills } from './tracks/cpp.extra';
 import { csharpTrack, csharpExercises } from './tracks/csharp';
+import { csharpExtra, csharpExtraSkills } from './tracks/csharp.extra';
 import { rustTrack, rustExercises } from './tracks/rust';
+import { rustExtra, rustExtraSkills } from './tracks/rust.extra';
 import { goTrack, goExercises } from './tracks/go';
+import { goExtra, goExtraSkills } from './tracks/go.extra';
 import { sqlTrack, sqlExercises } from './tracks/sql';
+import { sqlExtra, sqlExtraSkills } from './tracks/sql.extra';
 import { ue5Track, ue5Exercises } from './tracks/ue5';
+import { ue5Extra, ue5ExtraSkills } from './tracks/ue5.extra';
 import { unityTrack, unityExercises } from './tracks/unity';
+import { unityExtra, unityExtraSkills } from './tracks/unity.extra';
 import { godotTrack, godotExercises } from './tracks/godot';
+import { godotExtra, godotExtraSkills } from './tracks/godot.extra';
 import { gitTrack, gitExercises } from './tracks/git';
+import { gitExtra, gitExtraSkills } from './tracks/git.extra';
 
 /**
  * The whole library, assembled once at module load.
@@ -20,36 +33,45 @@ import { gitTrack, gitExercises } from './tracks/git';
  * that ships inside the app. Everything adaptive happens in src/engine, which
  * only ever reads from these arrays.
  */
+/**
+ * A track plus whatever its `.extra` file adds. Keeping the additions in their
+ * own file means the original course files stay readable, and a track can grow
+ * a new unit without anybody rewriting the one that already works.
+ */
+function withExtras(track: Track, extraSkills: Skill[] = []): Track {
+  return extraSkills.length ? { ...track, skills: [...track.skills, ...extraSkills] } : track;
+}
+
 export const TRACKS: Track[] = [
-  pythonTrack,
-  javascriptTrack,
-  typescriptTrack,
-  webTrack,
-  cppTrack,
-  csharpTrack,
-  rustTrack,
-  goTrack,
-  sqlTrack,
-  ue5Track,
-  unityTrack,
-  godotTrack,
-  gitTrack,
+  withExtras(pythonTrack, pythonExtraSkills),
+  withExtras(javascriptTrack, javascriptExtraSkills),
+  withExtras(typescriptTrack, typescriptExtraSkills),
+  withExtras(webTrack, webExtraSkills),
+  withExtras(cppTrack, cppExtraSkills),
+  withExtras(csharpTrack, csharpExtraSkills),
+  withExtras(rustTrack, rustExtraSkills),
+  withExtras(goTrack, goExtraSkills),
+  withExtras(sqlTrack, sqlExtraSkills),
+  withExtras(ue5Track, ue5ExtraSkills),
+  withExtras(unityTrack, unityExtraSkills),
+  withExtras(godotTrack, godotExtraSkills),
+  withExtras(gitTrack, gitExtraSkills),
 ];
 
 const EXERCISES_BY_TRACK: Record<TrackId, Exercise[]> = {
-  python: pythonExercises,
-  javascript: javascriptExercises,
-  typescript: typescriptExercises,
-  web: webExercises,
-  cpp: cppExercises,
-  csharp: csharpExercises,
-  rust: rustExercises,
-  go: goExercises,
-  sql: sqlExercises,
-  ue5: ue5Exercises,
-  unity: unityExercises,
-  godot: godotExercises,
-  git: gitExercises,
+  python: [...pythonExercises, ...pythonExtra],
+  javascript: [...javascriptExercises, ...javascriptExtra],
+  typescript: [...typescriptExercises, ...typescriptExtra],
+  web: [...webExercises, ...webExtra],
+  cpp: [...cppExercises, ...cppExtra],
+  csharp: [...csharpExercises, ...csharpExtra],
+  rust: [...rustExercises, ...rustExtra],
+  go: [...goExercises, ...goExtra],
+  sql: [...sqlExercises, ...sqlExtra],
+  ue5: [...ue5Exercises, ...ue5Extra],
+  unity: [...unityExercises, ...unityExtra],
+  godot: [...godotExercises, ...godotExtra],
+  git: [...gitExercises, ...gitExtra],
 };
 
 export function trackById(id: TrackId): Track | undefined {

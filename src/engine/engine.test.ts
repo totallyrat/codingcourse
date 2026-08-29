@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { buildCourse, orderSyllabus, recommendTracks, slotsForBudget } from './courseBuilder';
+import { buildCourse, lessonSize, orderSyllabus, recommendTracks, slotsForBudget } from './courseBuilder';
 import { activeSkill, composeLesson, indexLibrary, isSkillUnlocked, skillMastery } from './lessonComposer';
-import { completeLesson, createProfile, recordAnswer, setCourse, streakState } from './progress';
+import {
+  buyItem,
+  completeLesson,
+  createProfile,
+  levelFor,
+  recordAnswer,
+  setCourse,
+  spendLessonSkip,
+  streakState,
+} from './progress';
+import { applyLesson, buildLevelIndex, freshLevel, runNeeded, type LevelState } from './levels';
 import { clearMistake, decayedStrength, dueMistakes, queueMistake, reviewConcept, INITIAL_MEMORY } from './scheduler';
 import { grade, splitTemplate } from './grader';
 import { TRACKS, exercisesForTrack, allExercises, trackById } from '@/content';
@@ -157,6 +167,8 @@ describe('lesson composer', () => {
       seconds: 300,
       perfect: false,
       skillId: first.skillId,
+      trackId: track.id,
+      atLevel: 4,
     }).profile;
 
     const second = composeLesson({ profile, course: profile.course!, track, library, slots: 12 });
@@ -181,6 +193,8 @@ describe('lesson composer', () => {
       seconds: 200,
       perfect: false,
       skillId: first.skillId,
+      trackId: track.id,
+      atLevel: 4,
     }).profile;
 
     const second = composeLesson({ profile, course: profile.course!, track, library, slots: 12 });
@@ -284,6 +298,8 @@ describe('lesson composer', () => {
         seconds: 240,
         perfect: true,
         skillId: lesson.skillId,
+        trackId: track.id,
+        atLevel: 4,
       }).profile;
     }
 
@@ -303,20 +319,20 @@ describe('lesson composer', () => {
 describe('progress', () => {
   it('awards more XP for a perfect lesson', () => {
     const base = createProfile('p');
-    const plain = completeLesson(base, { correct: 10, total: 12, seconds: 300, perfect: false, skillId: 's' });
-    const perfect = completeLesson(base, { correct: 12, total: 12, seconds: 300, perfect: true, skillId: 's' });
+    const plain = completeLesson(base, { correct: 10, total: 12, seconds: 300, perfect: false, skillId: 's', trackId: 'python', atLevel: 5 });
+    const perfect = completeLesson(base, { correct: 12, total: 12, seconds: 300, perfect: true, skillId: 's', trackId: 'python', atLevel: 5 });
     expect(perfect.xpEarned).toBeGreaterThan(plain.xpEarned);
   });
 
   it('extends a streak on consecutive days and resets after a gap', () => {
     let profile = createProfile('p');
     const day = (n: number) => new Date(2026, 0, n, 12);
-    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's' }, day(1)).profile;
+    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's', trackId: 'python', atLevel: 5 }, day(1)).profile;
     expect(profile.streak).toBe(1);
-    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's' }, day(2)).profile;
+    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's', trackId: 'python', atLevel: 5 }, day(2)).profile;
     expect(profile.streak).toBe(2);
     // A five-day gap is past any freeze.
-    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's' }, day(8)).profile;
+    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's', trackId: 'python', atLevel: 5 }, day(8)).profile;
     expect(profile.streak).toBe(1);
     expect(profile.bestStreak).toBe(2);
   });
@@ -324,15 +340,15 @@ describe('progress', () => {
   it('spends a freeze to survive a single missed day', () => {
     let profile = createProfile('p');
     const day = (n: number) => new Date(2026, 0, n, 12);
-    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's' }, day(1)).profile;
-    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's' }, day(3)).profile;
+    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's', trackId: 'python', atLevel: 5 }, day(1)).profile;
+    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's', trackId: 'python', atLevel: 5 }, day(3)).profile;
     expect(profile.streak).toBe(2);
     expect(profile.freezes).toBe(1);
   });
 
   it('reports a streak as at risk on the day after practice', () => {
     let profile = createProfile('p');
-    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's' }, new Date(2026, 0, 1, 12)).profile;
+    profile = completeLesson(profile, { correct: 5, total: 5, seconds: 60, perfect: true, skillId: 's', trackId: 'python', atLevel: 5 }, new Date(2026, 0, 1, 12)).profile;
     expect(streakState(profile, new Date(2026, 0, 1, 20))).toBe('active');
     expect(streakState(profile, new Date(2026, 0, 2, 9))).toBe('at-risk');
   });
@@ -467,5 +483,203 @@ describe('content library', () => {
   it('gives every exercise an explanation to learn from', () => {
     const missing = allExercises().filter((e) => !e.explain || e.explain.length < 12);
     expect(missing.map((e) => e.id)).toEqual([]);
+  });
+});
+
+
+/* ============================================================================
+   The ten-level ladder
+   ========================================================================== */
+
+const strong = { score: 1, atLevel: 6, total: 12 };
+const weak = { score: 0.3, atLevel: 6, total: 12 };
+const middling = { score: 0.7, atLevel: 6, total: 12 };
+
+describe('the level ladder', () => {
+  it('does not promote on one good lesson, however good', () => {
+    const after = applyLesson(freshLevel(), strong);
+    expect(after.moved).toBe(null);
+    expect(after.state.level).toBe(1);
+    expect(after.state.run).toBe(1);
+  });
+
+  it('promotes on a run of strong lessons at the current level', () => {
+    let state = freshLevel();
+    const need = runNeeded(state.level);
+    let moved: string | null = null;
+    for (let i = 0; i < need; i++) {
+      const step = applyLesson(state, strong);
+      state = step.state;
+      moved = step.moved;
+    }
+    expect(moved).toBe('up');
+    expect(state.level).toBe(2);
+    expect(state.run).toBe(0);
+  });
+
+  it('asks for a longer run the higher you climb', () => {
+    expect(runNeeded(1)).toBeLessThan(runNeeded(4));
+    expect(runNeeded(4)).toBeLessThan(runNeeded(9));
+  });
+
+  it('resets the run when a lesson is merely alright', () => {
+    let state = applyLesson(freshLevel(), strong).state;
+    expect(state.run).toBe(1);
+    state = applyLesson(state, middling).state;
+    expect(state.run).toBe(0);
+    expect(state.level).toBe(1);
+  });
+
+  it('cannot be promoted by a lesson that was all easy revision', () => {
+    // Nothing in the lesson was at the learner's level, so however well it
+    // went it is not evidence of readiness for the next rung.
+    const state = applyLesson({ level: 4, run: 5, slips: 0, recent: [] }, { score: 1, atLevel: 0, total: 12 });
+    expect(state.moved).toBe(null);
+    expect(state.state.level).toBe(4);
+  });
+
+  it('eases off after two struggling lessons in a row, never below level one', () => {
+    let state: LevelState = { level: 3, run: 0, slips: 0, recent: [] };
+    state = applyLesson(state, weak).state;
+    expect(state.level).toBe(3);
+    const down = applyLesson(state, weak);
+    expect(down.moved).toBe('down');
+    expect(down.state.level).toBe(2);
+
+    let floor: LevelState = { level: 1, run: 0, slips: 1, recent: [] };
+    floor = applyLesson(floor, weak).state;
+    expect(floor.level).toBe(1);
+  });
+
+  it('stops at ten', () => {
+    let state: LevelState = { level: 10, run: 3, slips: 0, recent: [] };
+    for (let i = 0; i < 6; i++) state = applyLesson(state, strong).state;
+    expect(state.level).toBe(10);
+  });
+
+  it('spreads every track across the whole ladder', () => {
+    for (const track of TRACKS) {
+      const levels = buildLevelIndex(track, exercisesForTrack(track.id));
+      const values = [...levels.values()];
+      expect(Math.min(...values), `${track.id} has no gentle material`).toBeLessThanOrEqual(2);
+      expect(Math.max(...values), `${track.id} tops out too low`).toBeGreaterThanOrEqual(6);
+    }
+  });
+
+  it('keeps a level-one lesson out of the deep end, in every track', () => {
+    for (const track of TRACKS) {
+      const profile = freshProfile(track.id);
+      const library = exercisesForTrack(track.id);
+      const levels = buildLevelIndex(track, library);
+      const size = lessonSize(10, 1);
+      const lesson = composeLesson({ profile, course: profile.course!, track, library, slots: size, level: 1 });
+      const worst = Math.max(...lesson.slots.map((s) => levels.get(s.exercise.id) ?? 9));
+      // Nothing from the top half of the ladder, ever, in somebody's first
+      // lesson. Where a track is too thin to fill the lesson with gentle
+      // material, the lesson gets shorter rather than harder.
+      expect(worst, `${track.id} opened with a level ${worst} item`).toBeLessThanOrEqual(3);
+      expect(lesson.slots.length, `${track.id} came up short`).toBeGreaterThanOrEqual(5);
+      expect(lesson.level).toBe(1);
+    }
+  });
+
+  it('makes early lessons short and later ones longer', () => {
+    expect(lessonSize(10, 1)).toBeLessThan(lessonSize(10, 8));
+    expect(lessonSize(5, 9)).toBeLessThanOrEqual(slotsForBudget(5));
+  });
+
+  it('opens the harder material up as the learner climbs', () => {
+    const profile = freshProfile();
+    const track = trackById('python')!;
+    const library = exercisesForTrack('python');
+    const levels = buildLevelIndex(track, library);
+    const high = composeLesson({ profile, course: profile.course!, track, library, slots: 12, level: 7 });
+    const hardest = Math.max(...high.slots.map((s) => levels.get(s.exercise.id) ?? 1));
+    expect(hardest).toBeGreaterThan(2);
+  });
+
+  it('carries the ladder through a finished lesson', () => {
+    let profile = freshProfile();
+    const before = levelFor(profile, 'python').level;
+    const reward = completeLesson(profile, {
+      correct: 12,
+      total: 12,
+      seconds: 200,
+      perfect: true,
+      skillId: 'py.first',
+      trackId: 'python',
+      atLevel: 6,
+    });
+    profile = reward.profile;
+    expect(levelFor(profile, 'python').run).toBe(1);
+    expect(levelFor(profile, 'python').level).toBe(before);
+    expect(reward.gemsEarned).toBeGreaterThan(0);
+  });
+});
+
+/* ============================================================================
+   The shop
+   ========================================================================== */
+
+describe('the shop', () => {
+  it('refuses a purchase you cannot afford, and takes nothing', () => {
+    const broke = { ...createProfile('p'), gems: 10 };
+    const result = buyItem(broke, 'lessonSkip');
+    expect(result.ok).toBe(false);
+    expect(result.profile.gems).toBe(10);
+    expect(result.profile.inventory.lessonSkip).toBe(0);
+  });
+
+  it('charges for a streak saver and hands over a freeze', () => {
+    const rich = { ...createProfile('p'), gems: 200 };
+    const result = buyItem(rich, 'streakSaver');
+    expect(result.ok).toBe(true);
+    expect(result.profile.gems).toBe(150);
+    expect(result.profile.freezes).toBe(rich.freezes + 1);
+  });
+
+  it('doubles the XP of the next lessons after a super boost', () => {
+    const rich = { ...createProfile('p'), gems: 200 };
+    const boosted = buyItem(rich, 'superBoost').profile;
+    expect(boosted.boostLessons).toBe(3);
+    const summary = {
+      correct: 10,
+      total: 12,
+      seconds: 200,
+      perfect: false,
+      skillId: 's',
+      trackId: 'python',
+      atLevel: 5,
+    };
+    const withBoost = completeLesson(boosted, summary);
+    const without = completeLesson(rich, summary);
+    expect(withBoost.xpEarned).toBe(without.xpEarned * 2);
+    expect(withBoost.profile.boostLessons).toBe(2);
+  });
+
+  it('always gives something out of a chest, whatever the roll', () => {
+    const rich = { ...createProfile('p'), gems: 500 };
+    for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
+      const result = buyItem(rich, 'chest', roll);
+      expect(result.ok).toBe(true);
+      expect(result.granted).not.toBe(null);
+      expect(result.granted).not.toBe('chest');
+      expect(result.profile.gems).toBe(430);
+    }
+  });
+
+  it('spends a lesson skip only when one is held', () => {
+    const track = trackById('python')!;
+    const skill = track.skills[0];
+    const none = spendLessonSkip(createProfile('p'), skill);
+    expect(none.lessonIndex).toBe(0);
+
+    const held = buyItem({ ...createProfile('p'), gems: 200 }, 'lessonSkip').profile;
+    const after = spendLessonSkip(held, skill);
+    expect(after.lessonIndex).toBe(1);
+    expect(after.inventory.lessonSkip).toBe(0);
+    for (const concept of skill.concepts) {
+      expect(after.concepts[concept].seen).toBeGreaterThanOrEqual(2);
+    }
   });
 });
