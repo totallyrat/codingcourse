@@ -307,9 +307,13 @@
   border-color: var(--line-strong);
   background: var(--surface-2);
 }
+.matchcell:active:not(:disabled) {
+  transform: scale(0.965);
+}
 .matchcell.is-active {
   border-color: var(--text);
   background: var(--surface-3);
+  box-shadow: 0 0 0 1px var(--text);
 }
 .matchcell.is-done {
   border-color: var(--right-line);
@@ -880,7 +884,7 @@
 }
 @keyframes press-ring {
   from {
-    opacity: 0.16;
+    opacity: 0.22;
     transform: translate(-50%, -50%) scale(1);
   }
   to {
@@ -899,8 +903,11 @@
   0% {
     transform: scale(1);
   }
-  45% {
-    transform: scale(1.035);
+  40% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.99);
   }
   100% {
     transform: scale(1);
