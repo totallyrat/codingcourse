@@ -174,8 +174,13 @@ than being a number that only moves in the shop:
 | **Lesson Skip** | credits a skill as passed — it still comes back for review |
 | **Mystery Chest** | one of the other four, resolved in the engine on purchase |
 
-Finished quests pay chests too, and they stack up in the shop until you open
-them.
+Finished quests pay chests too, and they stack up on the Quests tab until you
+open them — which is not a formality. A chest takes between five and fifteen
+hits: it shakes harder each time, the light grows through the seams, and then
+it goes, lid spinning off, and the item is thrown up out of it and lands in
+front of you. The number of hits is rolled per chest, and what is inside is
+rolled by the engine at the moment the lid goes, so nothing on screen knows the
+answer any earlier than the person tapping does.
 
 ### Quests, and the league
 
@@ -185,21 +190,47 @@ for things the app already counts — 40 XP, three lessons, 80% in a lesson, a
 skill past 75%, a level climbed — and finishing one pays a chest. They update
 while you watch, on the profile screen, straight after a lesson.
 
-The league ranks you against fifteen simulated learners on **XP earned since
+Quests have their own tab: the week's count, the time left, the chests waiting,
+and ten bars. The league ranks you against fifteen simulated learners on **XP earned since
 Monday**. Everyone shows zero at the start of the week; your real total is
 never touched. The bots are generated on the device from your id and the week,
 each with its own pace, so the table is different every week and stable within
 it. Nothing is uploaded — there is no server to upload it to, and the screen
 says so.
 
+### Hard Mode
+
+Finish a lesson without a single mistake and it is not over. A card takes the
+screen — *not one mistake* — and three more questions arrive, drawn a rung
+above the one you are on. They cost no hearts and cannot spoil the lesson you
+have already won: they pay **double XP**, they count as the strongest evidence
+the ladder can get, and the celebration reports them on their own line. They
+are composed with the lesson rather than after it, so a lesson is still one
+deterministic object and the player only decides whether to play them.
+
 ### After a lesson
 
 The celebration screen is one mascot, one line, and three numbers. Pressing
 Continue drops you on your profile with the numbers **still where they were
 before the lesson**, and then releases them: today's XP, your level, the course,
-the ladder, then your strongest skills, then what needs work, then the quests —
-the page scrolling itself down to each group as it moves. You watch the lesson
-you just did land, rather than finding it already landed.
+the ladder, then your strongest skills, then what needs work — the page
+scrolling itself down to each group as it moves — and then the app walks over
+to the Quests tab and does the same there. You watch the lesson you just did
+land, rather than finding it already landed.
+
+### Everything answers back
+
+A lesson is full of things to touch, and every one of them replies. A press
+sends a ring out from under the finger; a selection pops; a right answer swells
+once and throws a small burst of paper; a wrong one shakes. It is all transform
+and opacity — no layout is animated — and all of it stops dead when the system
+asks for reduced motion.
+
+Opening the app plays a short piece of its own: a ring drawing itself, the
+mascot landing inside it, the name arriving a letter at a time, and then the
+whole thing lifting away. It runs over the profile being read off disk, so the
+wait it covers is one that was happening anyway, and it is gone in under two
+seconds.
 
 ### When you are stuck
 
@@ -318,7 +349,7 @@ the desktop window is simply locked to a phone's aspect and keeps its own
 title bar. That means one layout to design, one set of gestures to keep
 working, and no second-class version.
 
-The shell is built for a thumb: four tabs you can swipe between with the
+The shell is built for a thumb: five tabs you can swipe between with the
 indicator tracking your finger, the course as a **path** you scroll — big
 round lesson nodes weaving down the screen, a card that opens over the one you
 press, section banners and a trophy at the end of each — sheets you throw away
