@@ -832,3 +832,125 @@
   align-items: baseline;
   color: var(--text-body);
 }
+
+/* ============================================================
+   Press, select, land
+
+   Everything a lesson asks you to touch answers back. A press pushes the
+   surface down and sends a ring out from under the finger; a selection pops;
+   a right answer swells once and glows; a wrong one shakes. All of it is
+   transform and opacity, and all of it stops under prefers-reduced-motion.
+   ============================================================ */
+
+.option,
+.matchcell,
+.tile,
+.bigbtn,
+.ghostbtn,
+.btn {
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The ring. It lives in ::after so nothing needs a wrapper element. */
+.option::after,
+.matchcell::after,
+.tile::after,
+.bigbtn::after,
+.btn::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(1);
+  pointer-events: none;
+}
+.option:active::after,
+.matchcell:not(:disabled):active::after,
+.tile:not(:disabled):active::after,
+.bigbtn:active::after,
+.btn:not(:disabled):active::after {
+  animation: press-ring 460ms var(--ease-out);
+}
+@keyframes press-ring {
+  from {
+    opacity: 0.16;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(28);
+  }
+}
+
+/* Selecting something is a small, quick pop — the answer to "did that
+   register?" before the eye has finished moving. */
+.option.is-picked,
+.matchcell.is-active {
+  animation: select-pop 260ms var(--ease-spring);
+}
+@keyframes select-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Being right is worth more than a colour change. */
+.option.is-right,
+.matchcell.is-done {
+  animation: answer-right 520ms var(--ease-spring);
+}
+@keyframes answer-right {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(126, 240, 178, 0.5);
+  }
+  35% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 8px rgba(126, 240, 178, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(126, 240, 178, 0);
+  }
+}
+.option.is-wrong {
+  animation: shake 420ms var(--ease-out);
+}
+/* The answer you missed fades up rather than appearing, so the eye follows
+   it instead of hunting for what changed. */
+.option.is-missed {
+  animation: fade-up 320ms var(--ease-out) 120ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option,
+  .matchcell,
+  .tile {
+    animation: none !important;
+  }
+  .option::after,
+  .matchcell::after,
+  .tile::after,
+  .bigbtn::after,
+  .btn::after {
+    display: none;
+  }
+}
+[data-reduce-motion='true'] .option,
+[data-reduce-motion='true'] .matchcell,
+[data-reduce-motion='true'] .tile {
+  animation: none !important;
+}

@@ -6,13 +6,32 @@ import { useEffect, useRef } from 'react';
  * little drag and a tumbling angle, gone in under three seconds and then
  * unmounted. It never runs when the system asks for reduced motion.
  */
-export function Confetti({ run, from = 0.42 }: { run: boolean; from?: number }) {
+export function Confetti({
+  run,
+  from = 0.42,
+  count = 140,
+  life = 2.7,
+  power = 1,
+  runKey = 0,
+}: {
+  run: boolean;
+  from?: number;
+  /** Pieces of paper. A whole-lesson burst wants far more than one answer. */
+  count?: number;
+  /** Seconds before it has cleared the screen. */
+  life?: number;
+  /** Scales how hard it is thrown. */
+  power?: number;
+  /** Change this to fire again — one burst per correct answer, say. */
+  runKey?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !run) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (document.documentElement.dataset.reduceMotion === 'true') return;
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const width = canvas.clientWidth;
@@ -25,9 +44,9 @@ export function Confetti({ run, from = 0.42 }: { run: boolean; from?: number }) 
 
     // The app has three colours and no accent; confetti borrows exactly those.
     const colours = ['#ffffff', '#f6c66b', '#7ef0b2', '#8e8e9a'];
-    const pieces = Array.from({ length: 140 }, () => {
+    const pieces = Array.from({ length: count }, () => {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.9;
-      const speed = 260 + Math.random() * 460;
+      const speed = (260 + Math.random() * 460) * power;
       return {
         x: width * (0.5 + (Math.random() - 0.5) * 0.36),
         y: height * from,
@@ -62,7 +81,7 @@ export function Confetti({ run, from = 0.42 }: { run: boolean; from?: number }) 
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(p.angle);
-        ctx.globalAlpha = Math.max(0, 1 - elapsed / 2.6);
+        ctx.globalAlpha = Math.max(0, 1 - elapsed / (life - 0.1));
         ctx.fillStyle = p.colour;
         // Scaling the height by the tumble is a cheap way to read as paper
         // rather than as squares falling.
@@ -70,12 +89,12 @@ export function Confetti({ run, from = 0.42 }: { run: boolean; from?: number }) 
         ctx.restore();
       }
 
-      if (elapsed < 2.7) raf = requestAnimationFrame(tick);
+      if (elapsed < life) raf = requestAnimationFrame(tick);
       else ctx.clearRect(0, 0, width, height);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [run, from]);
+  }, [run, from, count, life, power, runKey]);
 
   if (!run) return null;
   return <canvas className="confetti" ref={canvasRef} aria-hidden="true" />;

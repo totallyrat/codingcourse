@@ -27,6 +27,9 @@ export interface CelebrationProps {
   seed: number;
   /** Quests this lesson finished — a chest each. */
   questsCompleted: number;
+  /** Hard Mode, when it was earned: how many were played and how many won. */
+  hardTotal: number;
+  hardCorrect: number;
   /** The learner's own mascot, if they have made one. */
   avatar: AvatarConfig | null;
   onContinue: () => void;
@@ -35,6 +38,7 @@ export interface CelebrationProps {
 
 export function Celebration(props: CelebrationProps) {
   const { correct, total, seconds, xpEarned, gemsEarned, level, boosted, streak, seed, questsCompleted, avatar } = props;
+  const { hardTotal, hardCorrect } = props;
   const accuracy = total ? Math.round((correct / total) * 100) : 0;
   const perfect = correct === total && total > 0;
   const species = speciesFor(seed);
@@ -56,11 +60,13 @@ export function Celebration(props: CelebrationProps) {
   const headline =
     level.moved === 'up'
       ? `Level ${level.state.level}`
-      : perfect
-        ? 'Perfect'
-        : accuracy >= 70
-          ? 'Lesson done'
-          : 'That was a hard one';
+      : hardTotal > 0 && hardCorrect === hardTotal
+        ? 'Cleared it all'
+        : perfect
+          ? 'Perfect'
+          : accuracy >= 70
+            ? 'Lesson done'
+            : 'That was a hard one';
 
   return (
     <div className="celebrate">
@@ -108,6 +114,12 @@ export function Celebration(props: CelebrationProps) {
           <span className="scoreboard__label">gems</span>
         </div>
       </div>
+
+      {hardTotal ? (
+        <p className="celebrate__hard">
+          <span>Hard Mode</span> {hardCorrect} of {hardTotal}
+        </p>
+      ) : null}
 
       {questsCompleted ? (
         <p className="celebrate__quests">

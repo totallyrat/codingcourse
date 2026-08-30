@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Mascot } from '@/mascot/Mascot';
 import { GemIcon } from './Shop';
-import { Quests } from './Quests';
 import { tiltGaze } from './tilt';
 import { conceptLabel, trackById } from '@/content';
 import { skillMastery, weakestConcepts } from '@/engine/lessonComposer';
@@ -94,7 +93,6 @@ export function ProfileScreen({
 
   const skillsRef = useRef<HTMLDivElement>(null);
   const weakRef = useRef<HTMLDivElement>(null);
-  const questsRef = useRef<HTMLDivElement>(null);
 
   // The replay starts at the top and then walks down the page, arriving at
   // each group of bars just before it moves. Watching your skills change is
@@ -109,14 +107,8 @@ export function ProfileScreen({
     const timers = [
       window.setTimeout(() => skillsRef.current?.scrollIntoView({ behavior, block: 'center' }), 1300),
       window.setTimeout(() => weakRef.current?.scrollIntoView({ behavior, block: 'center' }), 2200),
-      window.setTimeout(() => questsRef.current?.scrollIntoView({ behavior, block: 'start' }), 3100),
     ];
     return () => timers.forEach(clearTimeout);
-  }, [replayFrom]);
-
-  const questsFrom = useMemo(() => {
-    if (!replayFrom?.quests) return undefined;
-    return Object.fromEntries(replayFrom.quests.quests.map((q) => [q.id, q.progress]));
   }, [replayFrom]);
 
   return (
@@ -241,9 +233,6 @@ export function ProfileScreen({
         </section>
       ) : null}
 
-      <div ref={questsRef}>
-        <Quests state={profile.quests} animateFrom={questsFrom} chests={profile.inventory.chest} />
-      </div>
     </div>
   );
 }

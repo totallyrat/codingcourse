@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Mascot } from '@/mascot/Mascot';
 import { Sheet } from './Sheet';
+import { ChestOpener } from './ChestOpener';
 import { haptic } from '@/lib/haptics';
 import { BOOST_LESSONS, INSTANT_XP, SHOP, buyItem, openQuestChest, type ShopItemId } from '@/engine/progress';
 import type { Profile } from '@/engine/types';
@@ -63,7 +63,9 @@ export function Shop({
   onUpdate: (fn: (p: Profile) => Profile) => void;
   onToast: (text: string, icon?: string) => void;
 }) {
-  const [reveal, setReveal] = useState<ShopItemId | null>(null);
+  // A chest is not opened by buying it. Buying it puts one in front of you;
+  // the opener decides when it gives.
+  const [chest, setChest] = useState<{ kind: 'bought' | 'quest'; seed: string } | null>(null);
 
   const buy = (id: ShopItemId) => {
     const preview = buyItem(profile, id);
@@ -72,29 +74,34 @@ export function Shop({
       onToast(preview.reason ?? 'Not enough gems.', '·');
       return;
     }
+    if (id === 'chest') {
+      haptic('tap');
+      setChest({ kind: 'bought', seed: `${profile.id}:buy:${profile.gems}:${Date.now()}` });
+      return;
+    }
     haptic('win');
-    // The engine rolls the chest; the UI only shows what came out.
-    let granted: ShopItemId | null = null;
     onUpdate((p) => {
       const result = buyItem(p, id);
+      return result.ok ? result.profile : p;
+    });
+    onToast(GRANT_TEXT[id], '✓');
+  };
+
+  /** Runs at the moment the lid goes: the engine rolls, the UI reports. */
+  const rollChest = (): ShopItemId | null => {
+    let granted: ShopItemId | null = null;
+    onUpdate((p) => {
+      const result = chest?.kind === 'quest' ? openQuestChest(p) : buyItem(p, 'chest');
       granted = result.granted;
       return result.ok ? result.profile : p;
     });
-    if (id === 'chest') setReveal(granted);
-    else onToast(GRANT_TEXT[id], '✓');
+    return granted;
   };
 
   const openQuest = () => {
-    const preview = openQuestChest(profile);
-    if (!preview.ok) return;
-    haptic('win');
-    let granted: ShopItemId | null = null;
-    onUpdate((p) => {
-      const result = openQuestChest(p);
-      granted = result.granted;
-      return result.ok ? result.profile : p;
-    });
-    setReveal(granted);
+    if (openQuestChest(profile).ok !== true) return;
+    haptic('tap');
+    setChest({ kind: 'quest', seed: `${profile.id}:quest:${profile.inventory.chest}` });
   };
 
   return (
@@ -154,16 +161,13 @@ export function Shop({
         bought with money, because there is nothing to buy.
       </p>
 
-      <Sheet open={reveal !== null} onClose={() => setReveal(null)} title="The chest was…">
-        {reveal ? (
-          <div className="reveal">
-            <Mascot species="byte" mood="celebrate" size={124} trackPointer={false} />
-            <p className="reveal__what">{GRANT_TEXT[reveal]}</p>
-            <button type="button" className="bigbtn" onClick={() => setReveal(null)}>
-              Nice
-            </button>
-          </div>
-        ) : null}
+      <Sheet open={chest !== null} onClose={() => setChest(null)} title="A chest">
+        <ChestOpener
+          open={chest !== null}
+          seed={chest?.seed ?? ''}
+          onRoll={rollChest}
+          onClose={() => setChest(null)}
+        />
       </Sheet>
     </div>
   );

@@ -10,6 +10,7 @@ import {
   setCourse,
   spendLessonSkip,
   streakState,
+  XP_PER_HARD,
 } from './progress';
 import { applyLesson, buildLevelIndex, freshLevel, runNeeded, type LevelState } from './levels';
 import { applyLessonToQuests, ensureWeek, generateQuests, weekKey, QUESTS_PER_WEEK } from './quests';
@@ -982,6 +983,63 @@ describe('stuck tips', () => {
   });
 });
 
+
+describe('Hard Mode', () => {
+  it('holds back three harder questions in every course lesson', () => {
+    for (const track of TRACKS) {
+      const profile = freshProfile(track.id);
+      const library = exercisesForTrack(track.id);
+      const levels = buildLevelIndex(trackById(track.id)!, library);
+      const lesson = composeLesson({
+        profile,
+        course: profile.course!,
+        track: trackById(track.id)!,
+        library,
+        slots: lessonSize(10, 1),
+        level: 1,
+      });
+      expect(lesson.hard, `${track.id} has no Hard Mode`).toHaveLength(3);
+      const worst = Math.max(...lesson.hard.map((slot) => levels.get(slot.exercise.id) ?? 1));
+      const easiest = Math.min(...lesson.hard.map((slot) => levels.get(slot.exercise.id) ?? 1));
+      // Harder than the lesson, but a stretch rather than an ambush: at the
+      // rung above at the gentlest end, and never more than four past it.
+      expect(easiest, `${track.id} opened Hard Mode below the learner's level`).toBeGreaterThanOrEqual(1);
+      expect(worst, `${track.id} put a level ${worst} question in Hard Mode at level 1`).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it('never repeats a question the lesson already asked', () => {
+    const profile = freshProfile('python');
+    const track = trackById('python')!;
+    const lesson = composeLesson({
+      profile,
+      course: profile.course!,
+      track,
+      library: exercisesForTrack('python'),
+      slots: 12,
+      level: 3,
+    });
+    const inLesson = new Set(lesson.slots.map((s) => s.exercise.id));
+    for (const slot of lesson.hard) expect(inLesson.has(slot.exercise.id)).toBe(false);
+  });
+
+  it('pays double for a Hard Mode answer, and counts it towards the ladder', () => {
+    const profile = freshProfile();
+    const plain = completeLesson(profile, {
+      correct: 8, total: 8, seconds: 200, perfect: true,
+      skillId: 'py.first', trackId: 'python', atLevel: 3,
+    });
+    const hard = completeLesson(profile, {
+      correct: 8, total: 8, seconds: 200, perfect: true,
+      skillId: 'py.first', trackId: 'python', atLevel: 3,
+      hardCorrect: 3, hardTotal: 3,
+    });
+    expect(hard.xpEarned - plain.xpEarned).toBe(3 * XP_PER_HARD);
+    expect(hard.gemsEarned).toBeGreaterThan(plain.gemsEarned);
+    // Three questions above your level is the strongest evidence there is.
+    expect(hard.level.state.run).toBeGreaterThanOrEqual(plain.level.state.run);
+  });
+});
 
 /* ============================================================================
    A course you can actually finish

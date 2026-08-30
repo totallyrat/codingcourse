@@ -1,6 +1,6 @@
 import { haptic } from '@/lib/haptics';
 
-export type TabId = 'course' | 'league' | 'shop' | 'profile';
+export type TabId = 'course' | 'league' | 'quests' | 'shop' | 'profile';
 
 export const TABS: Array<{ id: TabId; label: string; icon: JSX.Element }> = [
   {
@@ -20,6 +20,16 @@ export const TABS: Array<{ id: TabId; label: string; icon: JSX.Element }> = [
         <path d="M7 4h10v4a5 5 0 0 1-10 0z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
         <path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" fill="none" stroke="currentColor" strokeWidth="1.9" />
         <path d="M10 14h4v3h-4zM8 20h8" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'quests',
+    label: 'Quests',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5 4.5h14v15l-7-3.6-7 3.6z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" />
+        <path d="M9 9.4l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
@@ -46,7 +56,7 @@ export const TABS: Array<{ id: TabId; label: string; icon: JSX.Element }> = [
 ];
 
 /**
- * Three tabs, thumb-sized, with an indicator driven by `--pager-pos` so it
+ * Five tabs, thumb-sized, with an indicator driven by `--pager-pos` so it
  * travels with a half-finished swipe rather than snapping when it ends.
  */
 export function TabBar({ index, onSelect }: { index: number; onSelect: (i: number) => void }) {

@@ -17,6 +17,10 @@ export const XP_LESSON_BONUS = 20;
 export const XP_PERFECT_BONUS = 15;
 export const GEMS_PER_LESSON = 12;
 export const GEMS_PERFECT_BONUS = 8;
+/** A Hard Mode question is worth double, because it is worth more. */
+export const XP_PER_HARD = XP_PER_CORRECT * 2;
+/** And a gem each, so a clean lesson pays for itself a little faster. */
+export const GEMS_PER_HARD = 1;
 
 export function todayKey(now = new Date()): string {
   // Local date, not UTC: a streak should break at the learner's midnight.
@@ -145,6 +149,9 @@ export interface LessonSummary {
   atLevel: number;
   /** The composer had no at-level material left — see Lesson.starved. */
   starved?: boolean;
+  /** Hard Mode questions answered right, and how many were played. */
+  hardCorrect?: number;
+  hardTotal?: number;
   /** Items from the re-check queue that were answered right this time. */
   rechecksCleared?: number;
   /** Skills that crossed 75% because of this lesson. */
@@ -165,14 +172,21 @@ export interface LessonReward {
 /** Applies end-of-lesson bookkeeping: XP, gems, the ladder, the streak, the day log. */
 export function completeLesson(profile: Profile, summary: LessonSummary, now = new Date()): LessonReward {
   const boosted = profile.boostLessons > 0;
-  const base = summary.correct * XP_PER_CORRECT + XP_LESSON_BONUS + (summary.perfect ? XP_PERFECT_BONUS : 0);
+  const hardCorrect = summary.hardCorrect ?? 0;
+  const base =
+    summary.correct * XP_PER_CORRECT +
+    XP_LESSON_BONUS +
+    (summary.perfect ? XP_PERFECT_BONUS : 0) +
+    hardCorrect * XP_PER_HARD;
   const xpEarned = boosted ? base * 2 : base;
-  const gemsEarned = GEMS_PER_LESSON + (summary.perfect ? GEMS_PERFECT_BONUS : 0);
+  const gemsEarned = GEMS_PER_LESSON + (summary.perfect ? GEMS_PERFECT_BONUS : 0) + hardCorrect * GEMS_PER_HARD;
 
   const score = summary.total ? summary.correct / summary.total : 0;
   const level = applyLesson(levelFor(profile, summary.trackId), {
     score,
-    atLevel: summary.atLevel,
+    // Hard Mode items are a rung above by construction, so they are the
+    // strongest evidence the ladder can get.
+    atLevel: summary.atLevel + (summary.hardTotal ?? 0),
     total: summary.total,
     starved: summary.starved,
   });

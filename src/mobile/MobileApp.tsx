@@ -10,8 +10,10 @@ import { CoursePath } from './CoursePath';
 import { Shop, GemIcon } from './Shop';
 import { Leaderboard } from './Leaderboard';
 import { ProfileScreen } from './ProfileScreen';
+import { QuestsScreen } from './QuestsScreen';
 import { AvatarCreator } from './AvatarCreator';
 import { Celebration } from './Celebration';
+import { Boot } from './Boot';
 import { MobileSettings } from './MobileSettings';
 import { Pager } from './Pager';
 import { TabBar, TABS } from './TabBar';
@@ -36,6 +38,11 @@ import {
 import type { AvatarConfig, Course, Lesson as LessonModel, Profile, Skill } from '@/engine/types';
 import { skillMastery } from '@/engine/lessonComposer';
 
+/** Tab order, named because three of them are referred to by index. */
+const TAB_COURSE = 0;
+const TAB_QUESTS = 2;
+const TAB_PROFILE = 4;
+
 type View =
   | { name: 'tabs' }
   | { name: 'wizard' }
@@ -59,6 +66,9 @@ export function MobileApp() {
       {isElectron ? <TitleBar /> : null}
       <Shell />
       <div className="grain" aria-hidden="true" />
+      {/* Last in the tree so it paints over everything, including the profile
+          being read off disk behind it. */}
+      <Boot />
     </ToastHost>
   );
 }
@@ -73,9 +83,13 @@ function Shell() {
   useEffect(() => () => window.clearTimeout(installTimer.current), []);
   const [bannerGone, setBannerGone] = useState(() => installBannerDismissed());
   const [offline, setOffline] = useState(typeof navigator !== 'undefined' && !navigator.onLine);
-  // The profile as it was before the last lesson, so Profile can replay the
-  // change rather than just showing the result.
+  // The profile as it was before the last lesson, so Profile and Quests can
+  // replay the change rather than just showing the result.
   const [replayFrom, setReplayFrom] = useState<Profile | null>(null);
+  const questsFrom = useMemo(() => {
+    if (!replayFrom?.quests) return undefined;
+    return Object.fromEntries(replayFrom.quests.quests.map((q) => [q.id, q.progress]));
+  }, [replayFrom]);
   const toast = useToast();
   const platform = useMemo(() => currentPlatform(), []);
 
@@ -160,6 +174,8 @@ function Shell() {
           trackId: p.course?.trackId ?? '',
           atLevel: result.lesson.atLevel,
           starved: result.lesson.starved,
+          hardCorrect: result.hardCorrect,
+          hardTotal: result.hardTotal,
           rechecksCleared: result.rechecksCleared,
           skillsMastered,
         });
@@ -174,7 +190,7 @@ function Shell() {
     (course: Course) => {
       update((p) => setCourse(p, course));
       setView({ name: 'tabs' });
-      setTab(0);
+      setTab(TAB_COURSE);
     },
     [update],
   );
@@ -197,28 +213,42 @@ function Shell() {
     (before: Profile) => {
       setReplayFrom(before);
       setView({ name: 'tabs' });
-      setTab(3);
+      setTab(TAB_PROFILE);
       const canInstall =
         !installBannerDismissed() && platform.route !== 'installed' && platform.route !== 'desktop';
       // Never over the replay, and never after somebody's first lesson: the
       // bars they just earned are the thing to watch, and an install sheet
       // sliding over them is the app talking about itself instead.
       if (canInstall && before.lessonIndex >= 2) {
+        // Long enough to clear the whole after-lesson sequence: the profile
+        // bars, the walk down them, and the quests moving on the next tab.
         installTimer.current = window.setTimeout(() => {
           setInstallOpen(true);
           dismissInstallBanner();
           setBannerGone(true);
-        }, 4200);
+        }, 7600);
       }
     },
     [platform.route],
   );
 
+  // After the profile replay has run its course, the quests it moved are worth
+  // seeing move too — so the app walks itself over to them, once, and only if
+  // something actually changed.
+  useEffect(() => {
+    if (!replayFrom || tab !== TAB_PROFILE || !profile?.quests || !replayFrom.quests) return;
+    const before = new Map(replayFrom.quests.quests.map((q) => [q.id, q.progress]));
+    const moved = profile.quests.quests.some((q) => (before.get(q.id) ?? q.progress) < q.progress);
+    if (!moved) return;
+    const timer = window.setTimeout(() => setTab(TAB_QUESTS), 3400);
+    return () => window.clearTimeout(timer);
+  }, [replayFrom, tab, profile?.quests]);
+
   const saveAvatar = useCallback(
     (avatar: AvatarConfig) => {
       update((p) => ({ ...p, avatar }));
       setView({ name: 'tabs' });
-      setTab(3);
+      setTab(TAB_PROFILE);
       toast('Looking good.', '✓');
     },
     [update, toast],
@@ -278,6 +308,8 @@ function Shell() {
             streak={profile.streak}
             seed={profile.lessonIndex}
             questsCompleted={view.reward.questsCompleted.length}
+            hardTotal={view.result.hardTotal}
+            hardCorrect={view.result.hardCorrect}
             avatar={profile.avatar}
             onContinue={() => leaveLesson(view.before)}
             onAgain={() => startLesson('course')}
@@ -303,7 +335,7 @@ function Shell() {
               onSwitch={(course) => {
                 update((p) => setCourse(p, course));
                 setView({ name: 'tabs' });
-                setTab(0);
+                setTab(TAB_COURSE);
                 toast('Course switched. Your progress carried over.', '✓');
               }}
               onRerunWizard={() => setView({ name: 'wizard' })}
@@ -353,7 +385,7 @@ function Shell() {
               onReset={() => {
                 update(() => createProfile(`p_${Date.now().toString(36)}`));
                 setView({ name: 'tabs' });
-                setTab(0);
+                setTab(TAB_COURSE);
                 toast('Everything erased. Starting fresh.', '·');
               }}
             />
@@ -365,14 +397,14 @@ function Shell() {
 
   const showBanner =
     !bannerGone &&
-    tab === 0 &&
+    tab === TAB_COURSE &&
     (platform.route === 'ios-safari' || platform.route === 'ios-other' || platform.route === 'prompt');
 
   return (
     <div className="mapp">
       <header className={`mhead${collapsed ? ' is-collapsed' : ''}`}>
         <span className="mhead__mark">{track?.mark ?? '{}'}</span>
-        <span className="mhead__title">{tab === 0 ? (track?.name ?? 'Codeling') : TABS[tab].label}</span>
+        <span className="mhead__title">{tab === TAB_COURSE ? (track?.name ?? 'Codeling') : TABS[tab].label}</span>
         <span className="mhead__level" title={`Level ${ladder.level} of ten`}>
           L{ladder.level}
         </span>
@@ -435,7 +467,7 @@ function Shell() {
       <Pager
         index={tab}
         onIndex={(next) => {
-          if (next !== 3) setReplayFrom(null);
+          if (next !== TAB_PROFILE && next !== TAB_QUESTS) setReplayFrom(null);
           setTab(next);
         }}
         onPanelScroll={(panel, top) => {
@@ -445,11 +477,17 @@ function Shell() {
         {[
           <CoursePath key="course" profile={profile} onStart={() => startLesson('course')} onSkip={useSkip} />,
           <Leaderboard key="league" profile={profile} />,
+          <QuestsScreen
+            key="quests"
+            profile={profile}
+            onUpdate={update}
+            animateFrom={tab === TAB_QUESTS ? questsFrom : undefined}
+          />,
           <Shop key="shop" profile={profile} onUpdate={update} onToast={toast} />,
           <ProfileScreen
             key="profile"
             profile={profile}
-            replayFrom={tab === 3 ? replayFrom : null}
+            replayFrom={tab === TAB_PROFILE ? replayFrom : null}
             onSettings={() => setView({ name: 'settings' })}
             onEditAvatar={() => setView({ name: 'avatar' })}
           />,

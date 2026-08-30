@@ -418,6 +418,11 @@ export interface Lesson {
    */
   starved?: boolean;
   slots: LessonSlot[];
+  /**
+   * Three questions a rung above, played only by a learner who finishes the
+   * lesson without a mistake. Empty when the library had nothing to offer.
+   */
+  hard: LessonSlot[];
   /** Counts by source, used for the pre-lesson briefing. */
   mix: Record<LessonSlotSource, number>;
 }

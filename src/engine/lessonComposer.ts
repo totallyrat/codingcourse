@@ -1,5 +1,5 @@
 import { hashString, mulberry32, shuffle } from './rng';
-import { buildLevelIndex } from './levels';
+import { MAX_LEVEL, buildLevelIndex } from './levels';
 import { decayedStrength, dueConcepts, dueMistakes, memoryFor } from './scheduler';
 import type {
   Course,
@@ -52,6 +52,12 @@ export interface ComposeInput {
 }
 
 const RECHECK_SHARE = 0.4;
+/**
+ * How many extra questions a flawless lesson earns. Three is enough to feel
+ * like a round of its own and short enough that nobody dreads it for being
+ * long — the only thing that should be daunting is the difficulty.
+ */
+export const HARD_MODE_ITEMS = 3;
 /**
  * Below this a concept counts as not learned yet, and the composer will reach
  * up to two levels for material that teaches it rather than leave it alone.
@@ -569,6 +575,41 @@ export function composeLesson(input: ComposeInput): Lesson {
   const mix: Record<LessonSlotSource, number> = { recheck: 0, review: 0, new: 0, stretch: 0, warmup: 0 };
   for (const slot of arranged) mix[slot.source]++;
 
+  // --- Hard Mode ----------------------------------------------------------
+  // Three questions a rung above, held back for a learner who gets through
+  // the lesson without a single mistake. They are composed here rather than
+  // when they are earned so that a lesson is still one deterministic object:
+  // the player only decides whether to play them.
+  const hard: LessonSlot[] = [];
+  if (mode === 'course') {
+    const target = Math.min(MAX_LEVEL, learnerLevel + 1);
+    const pool: Exercise[] = [];
+    const seenHard = new Set<ExerciseId>();
+    for (const concept of [...skill.concepts, ...reached]) {
+      for (const ex of index.byConcept.get(concept) ?? []) {
+        if (used.has(ex.id) || seenHard.has(ex.id)) continue;
+        if (!reached.has(ex.concepts[0])) continue;
+        seenHard.add(ex.id);
+        pool.push(ex);
+      }
+    }
+    // A rung up, gentlest first, and never more than three rungs past that:
+    // Hard Mode is meant to stretch, not to hand somebody the last question in
+    // the library. Where a track is too thin to find three, it drops back to
+    // the hardest material below the target rather than reaching further up.
+    const above = pool.filter((ex) => levelOf(ex) >= target && levelOf(ex) <= target + 3);
+    const fallback = pool.filter((ex) => levelOf(ex) < target);
+    above.sort((a, b) => levelOf(a) - levelOf(b) || b.difficulty - a.difficulty);
+    fallback.sort((a, b) => levelOf(b) - levelOf(a) || b.difficulty - a.difficulty);
+    for (const ex of [...above, ...fallback]) {
+      if (hard.length >= HARD_MODE_ITEMS) break;
+      hard.push({ exercise: ex, source: 'stretch', own: ownConcepts.has(ex.concepts[0]) });
+    }
+    // All three or none. Two questions announced as a round is a let-down,
+    // and a lesson that sometimes has one is just noise.
+    if (hard.length < HARD_MODE_ITEMS) hard.length = 0;
+  }
+
   // Did the library still have something at this level to offer? If it did and
   // the lesson went easy anyway, that is an easy day and the ladder should say
   // so. If it did not, the lesson was starved, and the ladder is told so it
@@ -592,6 +633,7 @@ export function composeLesson(input: ComposeInput): Lesson {
     level: learnerLevel,
     proving: arranged.filter((slot) => levelOf(slot.exercise) > learnerLevel).length,
     atLevel: atLevelCount,
+    hard,
     starved: mode === 'course' && atLevelCount < needAtLevel && !spareAtLevel,
     slots: arranged,
     mix,

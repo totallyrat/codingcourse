@@ -6,6 +6,8 @@ import { grade as gradeAnswer, type Grade, type Response } from '@/engine/grader
 import { recordAnswer } from '@/engine/progress';
 import { tipsFor } from '@/engine/tips';
 import { conceptLabel } from '@/content';
+import { haptic } from '@/lib/haptics';
+import { Confetti } from '@/mobile/Confetti';
 import type { Lesson, LessonSlot, Profile } from '@/engine/types';
 
 const MAX_HEARTS = 5;
@@ -22,6 +24,9 @@ export interface LessonResult {
   missed: LessonSlot[];
   /** Items that came back from the re-check queue and were answered right. */
   rechecksCleared: number;
+  /** Hard Mode: how many of the extra questions were played, and won. */
+  hardTotal: number;
+  hardCorrect: number;
   outOfHearts: boolean;
 }
 
@@ -47,6 +52,13 @@ export function Lesson({
   onQuit: () => void;
 }) {
   const [index, setIndex] = useState(0);
+  // Hard Mode: three questions a rung up, earned by a flawless lesson. The
+  // player is either in it or not; `slots` below is whichever list applies.
+  const [hardMode, setHardMode] = useState(false);
+  const [announcing, setAnnouncing] = useState(false);
+  const [hardCorrect, setHardCorrect] = useState(0);
+  // Bumped on every right answer so the burst re-fires.
+  const [cheer, setCheer] = useState(0);
   const [response, setResponse] = useState<Response | null>(null);
   const [grade, setGrade] = useState<Grade | null>(null);
   const [hearts, setHearts] = useState(MAX_HEARTS);
@@ -61,8 +73,12 @@ export function Lesson({
 
   const startedAt = useRef(Date.now());
   const itemStartedAt = useRef(Date.now());
-  const slot = lesson.slots[index];
+  const slots = hardMode ? lesson.hard : lesson.slots;
+  const slot = slots[index];
   const useHearts = profile.settings.hearts;
+  /** A lesson with nothing wrong in it, so far. */
+  const flawless = missed.length === 0 && correct === lesson.slots.length;
+  const earnedHard = flawless && lesson.hard.length > 0 && !hardMode;
 
   const mood: BitMood = grade ? (grade.correct ? 'happy' : 'wrong') : tipsShown > 0 ? 'thinking' : 'idle';
   const tips = useMemo(() => (slot ? tipsFor(slot.exercise) : []), [slot]);
@@ -91,9 +107,13 @@ export function Lesson({
       );
 
       if (result.correct) {
-        setCorrect((c) => c + 1);
+        if (hardMode) setHardCorrect((n) => n + 1);
+        else setCorrect((c) => c + 1);
         if (slot.source === 'recheck') setRechecksCleared((n) => n + 1);
-      } else {
+        // A small burst for every right answer. The big one is still saved
+        // for the end of the lesson.
+        setCheer((n) => n + 1);
+      } else if (!hardMode) {
         setMissed((m) => [...m, slot]);
         if (useHearts) {
           setBreaking(true);
@@ -102,13 +122,11 @@ export function Lesson({
         }
       }
     },
-    [grade, slot, response, tipsShown, onUpdate, useHearts],
+    [grade, slot, response, tipsShown, onUpdate, useHearts, hardMode],
   );
 
-  const advance = useCallback(() => {
-    const isLast = index === lesson.slots.length - 1;
-    const dead = useHearts && hearts === 0;
-    if (isLast || dead) {
+  const finish = useCallback(
+    (hardPlayed: number, hardWon: number, dead: boolean) => {
       onFinish({
         lesson,
         correct,
@@ -117,12 +135,44 @@ export function Lesson({
         perfect: correct === lesson.slots.length,
         missed,
         rechecksCleared,
+        hardTotal: hardPlayed,
+        hardCorrect: hardWon,
         outOfHearts: dead,
       });
+    },
+    [lesson, correct, missed, rechecksCleared, onFinish],
+  );
+
+  const advance = useCallback(() => {
+    const isLast = index === slots.length - 1;
+    const dead = useHearts && hearts === 0 && !hardMode;
+    if (dead) {
+      finish(0, 0, true);
+      return;
+    }
+    if (isLast) {
+      // A clean lesson opens the door to three harder ones. Announce it, and
+      // let the announcement itself be the transition.
+      if (earnedHard) {
+        haptic('win');
+        setAnnouncing(true);
+        return;
+      }
+      finish(hardMode ? lesson.hard.length : 0, hardCorrect, false);
       return;
     }
     setIndex((i) => i + 1);
-  }, [index, lesson, correct, missed, rechecksCleared, hearts, useHearts, onFinish]);
+  }, [index, slots.length, hardMode, earnedHard, hardCorrect, hearts, useHearts, lesson.hard.length, finish]);
+
+  /** Called when the "Hard Mode" card has finished playing. */
+  const enterHardMode = useCallback(() => {
+    setAnnouncing(false);
+    setHardMode(true);
+    setIndex(0);
+    setResponse(null);
+    setGrade(null);
+    setHearts(MAX_HEARTS);
+  }, []);
 
   // Enter drives the whole lesson: check, then continue.
   useEffect(() => {
@@ -154,10 +204,12 @@ export function Lesson({
     return pool[index % pool.length];
   }, [grade, index]);
 
+  if (announcing) return <HardModeCard onDone={enterHardMode} />;
   if (!slot) return null;
 
   return (
-    <div className="lesson">
+    <div className={`lesson${hardMode ? ' lesson--hard' : ''}`}>
+      <Confetti run={cheer > 0} runKey={cheer} count={46} from={0.52} life={1.5} power={0.72} />
       <header className="lesson__bar">
         <button type="button" className="lesson__quit" onClick={() => setConfirmQuit(true)} aria-label="Leave lesson">
           <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
@@ -165,15 +217,22 @@ export function Lesson({
           </svg>
         </button>
         <div className="lesson__progress">
-          <Progress value={index + (grade ? 1 : 0)} max={lesson.slots.length} label="Lesson progress" />
+          <Progress value={index + (grade ? 1 : 0)} max={slots.length} label="Lesson progress" />
         </div>
-        {useHearts ? <Hearts left={hearts} total={MAX_HEARTS} breaking={breaking} /> : <Chip>practice</Chip>}
+        {hardMode ? (
+          <Chip tone="streak">bonus</Chip>
+        ) : useHearts ? (
+          <Hearts left={hearts} total={MAX_HEARTS} breaking={breaking} />
+        ) : (
+          <Chip>practice</Chip>
+        )}
       </header>
 
       <div className="lesson__body">
         <div className="lesson__main" key={slot.exercise.id}>
           <div className="lesson__meta">
             <Chip>{KIND_LABEL[slot.exercise.kind]}</Chip>
+            {hardMode ? <Chip tone="streak">hard mode</Chip> : null}
             {slot.source === 'recheck' ? (
               <Chip tone="wrong">
                 back again{slot.misses && slot.misses > 1 ? ` · missed ${slot.misses}×` : ''}
@@ -232,7 +291,13 @@ export function Lesson({
                 {slot.exercise.explain ? <p className="verdict__explain">{slot.exercise.explain}</p> : null}
               </div>
               <Button variant={grade.correct ? 'right' : 'wrong'} size="lg" onClick={advance} autoFocus>
-                {index === lesson.slots.length - 1 || (useHearts && hearts === 0) ? 'Finish' : 'Continue'}
+                {index === slots.length - 1
+                  ? earnedHard
+                    ? 'Hard Mode'
+                    : 'Finish'
+                  : useHearts && hearts === 0 && !hardMode
+                    ? 'Finish'
+                    : 'Continue'}
               </Button>
             </div>
           ) : (
@@ -272,6 +337,48 @@ export function Lesson({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The Hard Mode card.
+ *
+ * It is a full-screen beat, not a dialogue: no button, no choice. You cleared
+ * a lesson without a mistake, the screen says so, and three harder questions
+ * arrive. Skipping straight past it would be the same as not having earned
+ * anything.
+ */
+function HardModeCard({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const reduced =
+      typeof window !== 'undefined' &&
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
+        document.documentElement.dataset.reduceMotion === 'true');
+    const timer = window.setTimeout(onDone, reduced ? 900 : 2350);
+    return () => window.clearTimeout(timer);
+  }, [onDone]);
+
+  return (
+    <div className="hardmode" role="status" aria-live="polite">
+      <div className="hardmode__glow" aria-hidden="true" />
+      <div className="hardmode__bars" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <p className="hardmode__eyebrow">Not one mistake</p>
+      <h2 className="hardmode__title" aria-label="Hard Mode">
+        {'HARD MODE'.split('').map((letter, i) => (
+          <span key={i} style={{ animationDelay: `${240 + i * 52}ms` }}>
+            {letter === ' ' ? '\u00a0' : letter}
+          </span>
+        ))}
+      </h2>
+      <p className="hardmode__note">Three questions, one level up. Nothing to lose.</p>
+      <div className="hardmode__mascot">
+        <Bit mood="celebrate" size={110} trackPointer={false} />
+      </div>
     </div>
   );
 }

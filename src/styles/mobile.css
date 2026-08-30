@@ -1333,43 +1333,72 @@ summary {
 }
 .bigbar__row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
 .bigbar__label {
-  font-size: var(--step-0);
+  font-size: var(--step-1);
+  font-weight: 500;
+  color: var(--text);
+}
+/* The number is a chip rather than a whisper: it is half the point of a bar. */
+.bigbar__value {
+  flex: none;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
   color: var(--text-body);
 }
-.bigbar__value {
-  font-family: var(--font-mono);
-  font-size: 12px;
+.bigbar__value em {
+  font-style: normal;
   color: var(--text-faint);
 }
 .bigbar__track {
-  height: 14px;
+  position: relative;
+  height: 20px;
   border-radius: var(--r-pill);
   background: var(--surface-2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
 }
 .bigbar--slim .bigbar__track {
-  height: 9px;
+  height: 14px;
 }
 .bigbar__fill {
+  position: relative;
   display: block;
   height: 100%;
+  min-width: 0;
   border-radius: var(--r-pill);
-  background: var(--text);
-  transition: width 700ms var(--ease-out);
+  background: linear-gradient(180deg, #ffffff, #d6d6de);
+  transition: width 760ms var(--ease-out);
+}
+/* A highlight along the top, so a filled bar reads as a solid object rather
+   than as a painted rectangle. */
+.bigbar__fill::after {
+  content: '';
+  position: absolute;
+  inset: 2px 3px auto 3px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.5);
+}
+.bigbar--slim .bigbar__fill::after {
+  height: 2px;
+  inset: 1.5px 3px auto 3px;
 }
 .bigbar--streak .bigbar__fill {
-  background: var(--streak);
+  background: linear-gradient(180deg, #ffd98a, var(--streak));
 }
 .bigbar--right .bigbar__fill {
-  background: var(--right);
+  background: linear-gradient(180deg, #a7f7cd, var(--right));
 }
 .bigbar--wrong .bigbar__fill {
-  background: var(--wrong);
+  background: linear-gradient(180deg, #ffa3a3, var(--wrong));
 }
 .profile__note {
   font-size: var(--step--1);
@@ -1761,37 +1790,102 @@ summary {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
+}
+.quest {
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line-soft);
+  background: var(--surface);
+}
+.quest.is-done {
+  border-color: var(--right-line);
+  background: linear-gradient(180deg, var(--right-dim), var(--surface));
 }
 .quest__row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 5px;
+  margin-bottom: 9px;
 }
 .quest__title {
   font-size: var(--step-0);
-  color: var(--text-body);
+  color: var(--text);
 }
 .quest__value {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-faint);
-  white-space: nowrap;
-}
-.quest__track {
-  height: 9px;
+  flex: none;
+  padding: 3px 9px;
   border-radius: var(--r-pill);
   background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-body);
+  white-space: nowrap;
+}
+.quest__value em {
+  font-style: normal;
+  color: var(--text-faint);
+}
+.quest__won {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.quest.is-done .quest__value {
+  background: transparent;
+  color: var(--right);
+}
+.quest__track {
+  position: relative;
+  height: 16px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
 }
 .quest__fill {
+  position: relative;
   display: block;
   height: 100%;
   border-radius: var(--r-pill);
-  background: var(--text-muted);
-  transition: width 720ms var(--ease-out);
+  background: linear-gradient(180deg, #ffffff, #c9c9d2);
+  transition: width 760ms var(--ease-out);
+  overflow: hidden;
+}
+.quest__fill::after {
+  content: '';
+  position: absolute;
+  inset: 2px 3px auto 3px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.55);
+}
+/* A single pass of light along a bar that just moved. */
+.quest__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.75) 50%, transparent 80%);
+  transform: translateX(-120%);
+  opacity: 0;
+}
+.quest.is-moving .quest__shine {
+  animation: questshine 1100ms var(--ease-out) 420ms;
+}
+@keyframes questshine {
+  0% {
+    opacity: 0.9;
+    transform: translateX(-120%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(120%);
+  }
 }
 .quest.is-done .quest__fill {
   background: var(--right);
@@ -1979,4 +2073,690 @@ summary {
 .celebrate__quests {
   font-size: var(--step-0);
   color: var(--streak);
+}
+
+/* ---------------------------------------------------------- Hard Mode */
+
+.celebrate__hard {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--streak-dim);
+  font-size: var(--step-0);
+  color: var(--streak);
+}
+.celebrate__hard span {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/*
+ * The Hard Mode card. It owns the screen for two seconds: the bars sweep in,
+ * the letters land one at a time, and the mascot arrives last.
+ */
+.hardmode {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+  background: #050506;
+  animation: hardin 240ms var(--ease-out) both;
+}
+@keyframes hardin {
+  from {
+    opacity: 0;
+  }
+}
+.hardmode__glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150vmax;
+  height: 150vmax;
+  transform: translate(-50%, -50%) scale(0.2);
+  background: radial-gradient(circle, rgba(246, 198, 107, 0.22), transparent 62%);
+  animation: hardglow 2.2s var(--ease-out) both;
+}
+@keyframes hardglow {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.35;
+  }
+}
+/* Three chevrons sweeping across, like a difficulty gauge filling. */
+.hardmode__bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 26px;
+  pointer-events: none;
+}
+.hardmode__bars span {
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--streak), transparent);
+  transform: translateX(-100%);
+  opacity: 0.55;
+  animation: hardsweep 1.5s var(--ease-out) both;
+}
+.hardmode__bars span:nth-child(2) {
+  animation-delay: 120ms;
+  height: 3px;
+}
+.hardmode__bars span:nth-child(3) {
+  animation-delay: 240ms;
+}
+@keyframes hardsweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.hardmode__eyebrow {
+  position: relative;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  animation: fadeup 420ms var(--ease-out) both;
+}
+.hardmode__title {
+  position: relative;
+  display: flex;
+  gap: 1px;
+  font-family: var(--font-display);
+  font-size: clamp(38px, 13vw, 66px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--streak);
+  text-shadow: 0 0 30px rgba(246, 198, 107, 0.45);
+}
+.hardmode__title span {
+  display: inline-block;
+  animation: hardletter 620ms var(--ease-spring) both;
+}
+@keyframes hardletter {
+  0% {
+    opacity: 0;
+    transform: translateY(-38px) scale(1.6) rotate(-6deg);
+    filter: blur(6px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+.hardmode__note {
+  position: relative;
+  font-size: var(--step-0);
+  color: var(--text-body);
+  animation: fadeup 520ms var(--ease-out) 900ms both;
+}
+.hardmode__mascot {
+  position: relative;
+  margin-top: 6px;
+  animation: hardpop 620ms var(--ease-spring) 1100ms both;
+}
+@keyframes hardpop {
+  from {
+    opacity: 0;
+    transform: translateY(26px) scale(0.7);
+  }
+}
+@keyframes fadeup {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* A lesson in Hard Mode wears a warmer edge. */
+.lesson--hard .lesson__bar {
+  border-bottom-color: var(--streak-dim);
+}
+.lesson--hard .lesson__prompt::after {
+  content: '';
+  display: block;
+  width: 46px;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: 2px;
+  background: var(--streak);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hardmode,
+  .hardmode__glow,
+  .hardmode__bars span,
+  .hardmode__title span,
+  .hardmode__note,
+  .hardmode__mascot,
+  .hardmode__eyebrow {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}
+
+/* ---------------------------------------------------------- the opening */
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--bg);
+  pointer-events: none;
+}
+.boot.is-out {
+  animation: bootout 420ms var(--ease-out) forwards;
+}
+@keyframes bootout {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+    visibility: hidden;
+  }
+}
+.boot__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 168px;
+  height: 168px;
+}
+/* A ring that draws itself once, anticlockwise from the top. */
+.boot__ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  overflow: visible;
+}
+.boot__ring circle {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 340;
+  stroke-dashoffset: 340;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  animation: bootring 1100ms var(--ease-out) 60ms forwards;
+}
+@keyframes bootring {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.boot__mascot {
+  animation: bootmascot 700ms var(--ease-spring) 120ms both;
+}
+@keyframes bootmascot {
+  0% {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.62);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.boot__word {
+  display: flex;
+  gap: 2px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: var(--text);
+}
+.boot__word span {
+  display: inline-block;
+  animation: bootletter 520ms var(--ease-out) both;
+}
+@keyframes bootletter {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+.boot__rule {
+  display: block;
+  width: 0;
+  height: 1px;
+  background: var(--line-strong);
+  animation: bootrule 800ms var(--ease-out) 700ms forwards;
+}
+@keyframes bootrule {
+  to {
+    width: 132px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot__ring circle,
+  .boot__mascot,
+  .boot__word span,
+  .boot__rule,
+  .boot.is-out {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}
+[data-reduce-motion='true'] .boot__ring circle,
+[data-reduce-motion='true'] .boot__mascot,
+[data-reduce-motion='true'] .boot__word span,
+[data-reduce-motion='true'] .boot__rule {
+  animation-duration: 1ms !important;
+  animation-delay: 0ms !important;
+}
+
+/* ---------------------------------------------------------- the chest */
+
+.chestbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 8px;
+  text-align: center;
+}
+.chestbox__lead {
+  font-size: var(--step-0);
+  color: var(--text-body);
+}
+.chestbox__hint {
+  min-height: 18px;
+  font-size: var(--step--1);
+  color: var(--text-faint);
+}
+.chestbox__prize {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  animation: prizein 420ms var(--ease-spring) both;
+}
+.chestbox__prize h3 {
+  font-family: var(--font-display);
+  font-size: var(--step-3);
+  color: var(--streak);
+}
+.chestbox__prize p {
+  max-width: 30ch;
+  font-size: var(--step--1);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.chestbox__prize .bigbtn {
+  margin-top: 6px;
+  width: 100%;
+}
+@keyframes prizein {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* The chest itself: a button you are meant to hit repeatedly. */
+.chest {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 220px;
+  height: 190px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.chest__art {
+  position: relative;
+  z-index: 2;
+  width: 190px;
+  overflow: visible;
+  fill: var(--text-muted);
+  /* Every hit remounts the svg, so this replays: a harder knock each time. */
+  animation: chesthit 240ms var(--ease-out);
+  transform-origin: 50% 90%;
+}
+.chest--shut .chest__art {
+  filter: drop-shadow(0 0 calc(var(--strain, 0) * 26px) rgba(246, 198, 107, calc(var(--strain, 0) * 0.75)));
+}
+@keyframes chesthit {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  22% {
+    transform: scale(1.06, 0.9) rotate(-3deg) translateY(3px);
+  }
+  48% {
+    transform: scale(0.97, 1.05) rotate(2.4deg);
+  }
+  76% {
+    transform: scale(1.02, 0.99) rotate(-1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+.chest__body {
+  fill: #24242c;
+  stroke: #3a3a46;
+  stroke-width: 2;
+}
+.chest__band {
+  fill: var(--streak);
+  opacity: calc(0.35 + var(--strain, 0) * 0.65);
+}
+.chest__lock {
+  fill: #0a0a0d;
+  stroke: var(--streak);
+  stroke-width: 2;
+}
+.chest__lid {
+  fill: #2c2c36;
+  stroke: #3a3a46;
+  stroke-width: 2;
+  transform-origin: 50% 46%;
+  transition: transform 200ms var(--ease-out);
+}
+/* Strain: the lid lifts a hair further with every hit before it goes. */
+.chest--shut .chest__lid {
+  transform: translateY(calc(var(--strain, 0) * -5px)) rotate(calc(var(--strain, 0) * -3deg));
+}
+.chest--burst .chest__lid,
+.chest--done .chest__lid {
+  animation: lidoff 700ms var(--ease-out) forwards;
+}
+@keyframes lidoff {
+  0% {
+    transform: none;
+    opacity: 1;
+  }
+  100% {
+    transform: translate(46px, -150px) rotate(96deg);
+    opacity: 0;
+  }
+}
+/* The light inside, which is the only warm thing on the screen. */
+.chest__glow {
+  position: absolute;
+  z-index: 1;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(246, 198, 107, 0.55), transparent 62%);
+  opacity: calc(var(--strain, 0) * 0.5);
+  transform: scale(calc(0.5 + var(--strain, 0) * 0.35));
+  transition: opacity 220ms linear, transform 220ms var(--ease-out);
+}
+.chest--burst .chest__glow,
+.chest--done .chest__glow {
+  animation: glowburst 760ms var(--ease-out) forwards;
+}
+@keyframes glowburst {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0.18;
+    transform: scale(1.2);
+  }
+}
+.chest__rays {
+  position: absolute;
+  z-index: 1;
+  width: 2px;
+  height: 2px;
+  opacity: 0;
+}
+.chest--burst .chest__rays,
+.chest--done .chest__rays {
+  animation: raysout 700ms var(--ease-out) forwards;
+}
+.chest__rays i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 3px;
+  height: 132px;
+  margin-left: -1.5px;
+  transform-origin: 50% 0;
+  background: linear-gradient(180deg, rgba(246, 198, 107, 0.85), transparent);
+}
+@keyframes raysout {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) rotate(0deg);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25) rotate(26deg);
+  }
+}
+/* The prize flies up out of the lid and lands in front of the chest. */
+.chest__prize {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  color: var(--streak);
+  opacity: 0;
+  animation: prizeout 900ms var(--ease-out) 140ms forwards;
+}
+.chest__prize svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 18px rgba(246, 198, 107, 0.6));
+}
+@keyframes prizeout {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.3) rotate(-20deg);
+  }
+  22% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(-104px) scale(1.3) rotate(14deg);
+  }
+  100% {
+    opacity: 1;
+    /* It lands clear of the chest, not on top of it. */
+    transform: translateY(-72px) scale(1.05) rotate(0deg);
+  }
+}
+.chest__mouth {
+  fill: #05050a;
+  opacity: 0;
+  transition: opacity 200ms linear;
+}
+.chest--burst .chest__mouth,
+.chest--done .chest__mouth {
+  opacity: 1;
+}
+/* One notch per hit, so the effort is visible. */
+.chest__hits {
+  position: absolute;
+  bottom: 2px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+}
+.chest__hits i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--streak);
+  animation: pop-in 220ms var(--ease-spring) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chest__art,
+  .chest__prize,
+  .chest__rays,
+  .chest__glow,
+  .chest__lid {
+    animation-duration: 1ms !important;
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------- quests tab */
+
+.questpage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-4) var(--sp-7);
+}
+.questpage__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.questpage__head h2 {
+  font-family: var(--font-display);
+  font-size: var(--step-4);
+  line-height: 1.05;
+}
+.questpage__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.questpage__count {
+  font-family: var(--font-display);
+  font-size: var(--step-4);
+  line-height: 1;
+  color: var(--text);
+}
+.questpage__count em {
+  font-style: normal;
+  font-size: var(--step-1);
+  color: var(--text-faint);
+}
+.questpage__timer {
+  font-size: var(--step--1);
+  color: var(--streak);
+}
+.questpage__note,
+.questpage__foot {
+  font-size: var(--step--1);
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.questpage__foot {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line-soft);
+}
+
+/* The chest, offered rather than hidden in a corner. */
+.chestbanner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--streak-dim);
+  background: linear-gradient(135deg, rgba(246, 198, 107, 0.14), var(--surface) 62%);
+  text-align: left;
+  transition: transform var(--t-fast) var(--ease-out), border-color var(--t-fast) linear;
+}
+.chestbanner:hover {
+  border-color: var(--streak);
+}
+.chestbanner:active {
+  transform: scale(0.985);
+}
+.chestbanner__art {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  color: var(--streak);
+  animation: chestbob 2.6s var(--ease-out) infinite;
+}
+.chestbanner__art svg {
+  width: 100%;
+  height: 100%;
+}
+.chestbanner__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chestbanner__text strong {
+  font-size: var(--step-0);
+  color: var(--text);
+}
+.chestbanner__text span {
+  font-size: var(--step--1);
+  color: var(--text-muted);
+}
+.chestbanner__go {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  background: var(--streak);
+  color: #14100a;
+  font-size: 13px;
+  font-weight: 600;
 }
