@@ -124,7 +124,7 @@ export function Shop({
             <strong>
               {profile.inventory.chest} quest chest{profile.inventory.chest === 1 ? '' : 's'}
             </strong>
-            <span>Won from quests. Tap to open one.</span>
+            <span>Won from quests. Tap to break one open.</span>
           </span>
         </button>
       ) : null}

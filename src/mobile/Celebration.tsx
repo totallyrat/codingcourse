@@ -124,7 +124,7 @@ export function Celebration(props: CelebrationProps) {
       {questsCompleted ? (
         <p className="celebrate__quests">
           {questsCompleted} quest{questsCompleted === 1 ? '' : 's'} complete ·{' '}
-          {questsCompleted === 1 ? 'a chest' : `${questsCompleted} chests`} waiting in the shop
+          {questsCompleted === 1 ? 'a chest' : `${questsCompleted} chests`} to break open
         </p>
       ) : null}
 
